@@ -108,8 +108,8 @@ export default function AdminDashboardPage() {
       const startOfToday = new Date();
       startOfToday.setHours(0, 0, 0, 0);
 
-      snapshot.forEach((docSnap) => {
-        const data = { id: docSnap.id, ...docSnap.data() };
+snapshot.forEach((docSnap: any) => {
+  const data: any = { id: docSnap.id, ...docSnap.data() };
         const createdAt = data.createdAt ? data.createdAt.toDate() : new Date();
 
         if (createdAt >= startOfToday) {
