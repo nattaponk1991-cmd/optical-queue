@@ -1,7 +1,7 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { collection, query, where, getDocs, addDoc, serverTimestamp } from "firebase/firestore";
+import { collection, query, where, getDocs, addDoc, serverTimestamp, doc, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 export default function SelectQueueTypePage() {
@@ -10,13 +10,25 @@ export default function SelectQueueTypePage() {
   const branchId = params.branchId as string;
 
   const [loading, setLoading] = useState(false);
+  const [allowReserve, setAllowReserve] = useState(false);
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [searchPhone, setSearchPhone] = useState("");
   const [searchError, setSearchError] = useState("");
   const [searching, setSearching] = useState(false);
 
+  // ดึงสถานะคิวสำรอง (allowReserve) จาก Firestore แบบ Realtime
+  useEffect(() => {
+    const branchRef = doc(db, "branches", branchId);
+    const unsubscribe = onSnapshot(branchRef, (docSnap) => {
+      if (docSnap.exists()) {
+        setAllowReserve(docSnap.data().allowReserve || false);
+      }
+    });
+    return () => unsubscribe();
+  }, [branchId]);
+
   // ฟังก์ชั่นสร้างคิวใหม่
-  const handleSelectType = async (type: "A" | "B" | "C") => {
+  const handleSelectType = async (type: "A" | "B" | "C" | "D") => {
     setLoading(true);
     try {
       const q = query(
@@ -66,12 +78,10 @@ export default function SelectQueueTypePage() {
       if (snapshot.empty) {
         setSearchError("ไม่พบคิวที่ตรงกับเบอร์โทรศัพท์นี้");
       } else {
-        // ดึงรายการคิวล่าสุดของเบอร์นี้
         const userQueues = snapshot.docs.map((doc) => ({
           id: doc.id,
           ...doc.data(),
         }));
-        // เรียงจากคิวล่าสุดไปเก่าสุด
         const latestQueue = userQueues.sort((a: any, b: any) => {
           const timeA = a.createdAt?.seconds || 0;
           const timeB = b.createdAt?.seconds || 0;
@@ -152,6 +162,27 @@ export default function SelectQueueTypePage() {
               ➔
             </span>
           </button>
+
+          {/* แสดงปุ่ม คิว D เฉพาะเมื่อเปิดรับคิวสำรอง (allowReserve === true) */}
+          {allowReserve && (
+            <button
+              onClick={() => handleSelectType("D")}
+              disabled={loading}
+              className="w-full bg-orange-50 hover:bg-orange-100 border-2 border-orange-500 rounded-2xl p-4 text-left transition flex items-center justify-between group shadow-sm animate-fade-in"
+            >
+              <div>
+                <p className="font-bold text-orange-900 text-base">
+                  🟠 คิว D: คิวสำรอง
+                </p>
+                <p className="text-xs text-orange-600 mt-1 font-medium">
+                  ติดต่อเจ้าหน้าที่เพื่อยืนยันสิทธิ์
+                </p>
+              </div>
+              <span className="text-orange-500 font-bold group-hover:translate-x-1 transition-transform">
+                ➔
+              </span>
+            </button>
+          )}
         </div>
 
         {/* ปุ่มค้นหาคิวเดิม */}
