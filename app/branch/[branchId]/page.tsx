@@ -191,6 +191,11 @@ export default function SelectQueueTypePage() {
           )}
         </div>
 
+        {/* หมายเหตุเงื่อนไขเวลาสละสิทธิ์ */}
+        <p className="mt-4 text-center text-xs font-semibold text-red-500 bg-red-50 py-2 px-3 rounded-xl border border-red-100">
+          * หากถึงคิวแล้วไม่แสดงตนภายใน 5 นาที ถือว่าท่านสละสิทธิ์
+        </p>
+
         {/* ปุ่มค้นหาคิวเดิม */}
         <div className="mt-6 pt-6 border-t border-gray-100 text-center">
           <p className="text-xs text-gray-500 mb-2">มีคิวอยู่แล้วหรือเผลอปิดหน้าจอ?</p>
