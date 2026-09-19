@@ -109,6 +109,7 @@ export default function SelectQueueTypePage() {
         </p>
 
         <div className="space-y-4">
+          {/* คิว A แสดงผลตลอดเวลา */}
           <button
             onClick={() => handleSelectType("A")}
             disabled={loading}
@@ -127,43 +128,48 @@ export default function SelectQueueTypePage() {
             </span>
           </button>
 
-          <button
-            onClick={() => handleSelectType("B")}
-            disabled={loading}
-            className="w-full bg-purple-50 hover:bg-purple-100 border-2 border-purple-500 rounded-2xl p-4 text-left transition flex items-center justify-between group shadow-sm"
-          >
-            <div>
-              <p className="font-bold text-purple-900 text-base">
-                🟣 คิว B: แคมเปญ + วัดสายตาใหม่
-              </p>
-              <p className="text-xs text-purple-600 mt-1 font-medium">
-                ใช้เวลาวัดสายตาประมาณ 15 นาที
-              </p>
-            </div>
-            <span className="text-purple-500 font-bold group-hover:translate-x-1 transition-transform">
-              ➔
-            </span>
-          </button>
+          {/* คิว B และ C แสดงผลเฉพาะเมื่อปิดคิวสำรอง (!allowReserve) */}
+          {!allowReserve && (
+            <>
+              <button
+                onClick={() => handleSelectType("B")}
+                disabled={loading}
+                className="w-full bg-purple-50 hover:bg-purple-100 border-2 border-purple-500 rounded-2xl p-4 text-left transition flex items-center justify-between group shadow-sm"
+              >
+                <div>
+                  <p className="font-bold text-purple-900 text-base">
+                    🟣 คิว B: แคมเปญ + วัดสายตาใหม่
+                  </p>
+                  <p className="text-xs text-purple-600 mt-1 font-medium">
+                    ใช้เวลาวัดสายตาประมาณ 15 นาที
+                  </p>
+                </div>
+                <span className="text-purple-500 font-bold group-hover:translate-x-1 transition-transform">
+                  ➔
+                </span>
+              </button>
 
-          <button
-            onClick={() => handleSelectType("C")}
-            disabled={loading}
-            className="w-full bg-green-50 hover:bg-green-100 border-2 border-green-500 rounded-2xl p-4 text-left transition flex items-center justify-between group shadow-sm"
-          >
-            <div>
-              <p className="font-bold text-green-900 text-base">
-                🟢 คิว C: ค่าสายตาเดิม / คิวด่วน
-              </p>
-              <p className="text-xs text-green-600 mt-1 font-medium">
-                ไม่ต้องรอเข้าห้องวัดสายตา
-              </p>
-            </div>
-            <span className="text-green-500 font-bold group-hover:translate-x-1 transition-transform">
-              ➔
-            </span>
-          </button>
+              <button
+                onClick={() => handleSelectType("C")}
+                disabled={loading}
+                className="w-full bg-green-50 hover:bg-green-100 border-2 border-green-500 rounded-2xl p-4 text-left transition flex items-center justify-between group shadow-sm"
+              >
+                <div>
+                  <p className="font-bold text-green-900 text-base">
+                    🟢 คิว C: ค่าสายตาเดิม / คิวด่วน
+                  </p>
+                  <p className="text-xs text-green-600 mt-1 font-medium">
+                    ไม่ต้องรอเข้าห้องวัดสายตา
+                  </p>
+                </div>
+                <span className="text-green-500 font-bold group-hover:translate-x-1 transition-transform">
+                  ➔
+                </span>
+              </button>
+            </>
+          )}
 
-          {/* แสดงปุ่ม คิว D เฉพาะเมื่อเปิดรับคิวสำรอง (allowReserve === true) */}
+          {/* คิว D แสดงผลเฉพาะเมื่อเปิดคิวสำรอง (allowReserve) */}
           {allowReserve && (
             <button
               onClick={() => handleSelectType("D")}
