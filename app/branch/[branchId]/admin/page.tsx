@@ -8,7 +8,7 @@ export default function AdminDashboardPage() {
   const params = useParams();
   const branchId = params.branchId as string;
 
-  const [queuesA, setQueuesA] = useState<any[]>([]); 
+  const [queuesA, setQueuesA] = useState<any[]>([]);
   const [queuesB, setQueuesB] = useState<any[]>([]); 
   const [queuesC, setQueuesC] = useState<any[]>([]); 
   const [queuesD, setQueuesD] = useState<any[]>([]); 
