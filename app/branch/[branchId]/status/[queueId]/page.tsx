@@ -19,6 +19,7 @@ export default function QueueStatusPage() {
   const [isUpdating, setIsUpdating] = useState(false);
 
   useEffect(() => {
+    if (!queueId) return;
     const queueRef = doc(db, "queues", queueId);
     
     const unsubscribeQueue = onSnapshot(queueRef, (docSnap) => {
@@ -98,8 +99,19 @@ export default function QueueStatusPage() {
     }
   };
 
-  if (!myQueue) return <div className="min-h-screen flex items-center justify-center bg-gray-50">กำลังโหลดข้อมูล...</div>;
+  const getTypeName = (type: string) => {
+    switch (type) {
+      case "A": return "วัดสายตา (ราคาปกติ)";
+      case "B": return "วัดสายตา (แคมเปญ)";
+      case "C": return "คิวด่วน / ค่าสายตาเดิม";
+      case "D": return "คิวสำรอง";
+      default: return "วัดสายตา";
+    }
+  };
 
+  if (!myQueue) return <div className="min-h-screen flex items-center justify-center bg-gray-50 text-gray-500 font-medium">กำลังโหลดข้อมูล...</div>;
+
+  // กรณีลูกค้ายังไม่ได้ลงทะเบียน ชื่อ-เบอร์โทร
   if (!myQueue.customerName || !myQueue.phoneNumber) {
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
@@ -108,9 +120,13 @@ export default function QueueStatusPage() {
           <p className="text-gray-500 text-sm mt-2">หมายเลขคิวของคุณคือ</p>
           <div className="text-6xl font-extrabold text-blue-600 my-4">{myQueue.queueNumber}</div>
           
-          <div className="bg-yellow-50 text-yellow-700 p-3 rounded-lg text-sm mb-6 border border-yellow-200">
+          <div className="bg-yellow-50 text-yellow-700 p-3 rounded-lg text-sm mb-3 border border-yellow-200">
             ⚠️ <b>กรุณากรอกข้อมูลด้านล่าง</b> เพื่อยืนยันการรับคิว<br/>หากไม่กรอกข้อมูล ระบบจะไม่สามารถเรียกคิวของคุณได้
           </div>
+
+          <p className="text-xs font-semibold text-red-500 bg-red-50 p-2.5 rounded-lg border border-red-100 mb-6">
+            * หากถึงคิวแล้วไม่แสดงตนภายใน 5 นาที ถือว่าท่านสละสิทธิ์
+          </p>
 
           <form onSubmit={handleUpdateInfo} className="space-y-4 text-left">
             <div>
@@ -147,9 +163,10 @@ export default function QueueStatusPage() {
     );
   }
 
+  // หน้าแสดงสถานะบัตรคิวหลังลงทะเบียนแล้ว
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-lg p-8 text-center">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-lg p-8 text-center border border-gray-100">
         <h1 className="text-xl font-bold text-gray-700 mb-2">คิวของคุณคือ</h1>
         
         <div className={`text-6xl font-extrabold my-6 ${myQueue.status === 'CALLED' ? 'text-green-500 animate-bounce' : 'text-blue-600'}`}>
@@ -182,26 +199,26 @@ export default function QueueStatusPage() {
           </>
         )}
 
-        <div className="border-t pt-6 flex justify-between text-gray-600">
+        <div className="border-t pt-6 flex justify-between items-center text-gray-600 mb-6">
           <div className="text-left">
-            <p className="text-sm text-gray-500">คิวที่กำลังเรียก</p>
-            <p className="text-2xl font-bold text-gray-800">{currentServing}</p>
+            <p className="text-xs text-gray-500 font-semibold">คิวที่กำลังเรียก</p>
+            <p className="text-2xl font-bold text-gray-800 mt-0.5">{currentServing}</p>
           </div>
           <div className="text-right">
-            <p className="text-sm text-gray-500">ประเภทบริการ</p>
-            <p className="text-lg font-semibold">{myQueue.type === 'C' ? 'คิวด่วน' : 'วัดสายตา'}</p>
+            <p className="text-xs text-gray-500 font-semibold">ประเภทบริการ</p>
+            <p className="text-sm font-bold text-gray-800 mt-1">{getTypeName(myQueue.type)}</p>
           </div>
         </div>
         
         {(myQueue.type === 'A' || myQueue.type === 'B') && (
-          <div className="mt-6 bg-blue-50 p-3 rounded-lg border border-blue-100 text-sm text-blue-700 text-left">
+          <div className="mb-6 bg-blue-50 p-3 rounded-lg border border-blue-100 text-sm text-blue-700 text-left">
             <span className="font-semibold block mb-1">ℹ️ ข้อมูลการรับบริการ</span>
             ระยะเวลาวัดสายตาต่อ 1 ท่านจะใช้เวลาโดยประมาณ 15 นาที หรืออาจจะใช้เวลานานกว่านี้ (ขึ้นอยู่กับความยากง่ายของแต่ละบุคคล)
           </div>
         )}
 
-        <p className={`text-sm font-semibold text-red-500 bg-red-50 p-3 rounded-lg border border-red-100 ${myQueue.type === 'C' ? 'mt-6' : 'mt-3'}`}>
-          * หากถึงคิวแล้วไม่แสดงตนภายใน 15 นาที<br/>ถือว่าท่านสละสิทธิ์
+        <p className="text-sm font-semibold text-red-500 bg-red-50 p-3 rounded-lg border border-red-100">
+          * หากถึงคิวแล้วไม่แสดงตนภายใน 5 นาที<br/>ถือว่าท่านสละสิทธิ์
         </p>
 
       </div>
