@@ -43,7 +43,7 @@ export default function AdminDashboardPage() {
     await setDoc(branchRef, { allowReserve: !allowReserve }, { merge: true });
   };
 
-  // ฟังก์ชั่นส่งเสียงเรียกคิวสำเนียงไทยธรรมชาติ
+  // ฟังก์ชั่นส่งเสียงเรียกคิวสำเนียงไทยวัยรุ่น สดใส น่าฟัง
   const speakQueue = (queueNumber: string, lang: "TH" | "EN" = "TH", queueType: string = "A") => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
 
@@ -52,15 +52,14 @@ export default function AdminDashboardPage() {
       window.speechSynthesis.resume();
     }
 
-    // กำหนดข้อความสถานที่ตามเงื่อนไข: A, B ไปห้องวัดสายตา / C, D ติดต่อเจ้าหน้าที่
-    let destination = "โปรดติดต่อเจ้าหน้าที่ค่ะ";
+    // กำหนดข้อความสถานที่: C และ D ตัดคำว่า "โปรด" ออก เหลือ "ติดต่อเจ้าหน้าที่ค่ะ"
+    let destination = "ติดต่อเจ้าหน้าที่ค่ะ";
     if (queueType === "A" || queueType === "B") {
       destination = "ที่ห้องวัดสายตาค่ะ";
     }
 
     let text = "";
     if (lang === "TH") {
-      // แปลงอักษรภาษาอังกฤษให้อ่านเป็นคำไทยธรรมชาติ
       let formattedNumber = queueNumber;
       if (queueNumber.startsWith("A")) formattedNumber = queueNumber.replace("A", "เอ");
       else if (queueNumber.startsWith("B")) formattedNumber = queueNumber.replace("B", "บี");
@@ -74,14 +73,17 @@ export default function AdminDashboardPage() {
 
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = lang === "TH" ? "th-TH" : "en-US";
-    utterance.rate = 0.88;
+    
+    // ปรับให้เสียงอ่อนเยาว์ลง: เพิ่ม Pitch ให้เสียงสูงขึ้นเล็กน้อย + ปรับ Rate ให้พูดยืดหยุ่นใสๆ
+    utterance.rate = 0.95;  // ความเร็วที่กระชับ ไม่ยาน
+    utterance.pitch = 1.25; // ปรับคีย์เสียงสูงขึ้นเพื่อความสดใส อ่อนวัย
     utterance.volume = 1;
 
-    // ค้นหาเสียงพากย์ภาษาไทยแท้ของระบบ (เช่น เสียง Kanya บน Mac/iOS)
+    // ค้นหาเสียงพากย์ Kanya หรือ Thai voice ที่คุณภาพดีที่สุด
     const voices = window.speechSynthesis.getVoices();
     if (voices.length > 0) {
       const thaiVoice = voices.find(
-        (v) => v.lang.includes("th") || v.name.toLowerCase().includes("kanya")
+        (v) => v.name.includes("Kanya") || v.lang.includes("th")
       );
       if (thaiVoice && lang === "TH") {
         utterance.voice = thaiVoice;
