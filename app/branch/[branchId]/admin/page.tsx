@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { collection, query, where, onSnapshot, doc, updateDoc, setDoc, serverTimestamp, Timestamp } from "firebase/firestore";
+import { collection, query, where, onSnapshot, doc, updateDoc, setDoc, serverTimestamp, Timestamp, writeBatch, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 export default function AdminDashboardPage() {
@@ -18,6 +18,12 @@ export default function AdminDashboardPage() {
   const [inputName, setInputName] = useState("");
   const [inputPhone, setInputPhone] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+
+  // State สำหรับ Modal รีเซ็ตคิวด้วยรหัสผ่าน
+  const [resetModalOpen, setResetModalOpen] = useState(false);
+  const [resetPassword, setResetPassword] = useState("");
+  const [resetError, setResetError] = useState("");
+  const [isResetting, setIsResetting] = useState(false);
 
   useEffect(() => {
     if (!branchId) return;
@@ -58,6 +64,62 @@ export default function AdminDashboardPage() {
   const toggleReserve = async () => {
     const branchRef = doc(db, "branches", branchId);
     await setDoc(branchRef, { allowReserve: !allowReserve }, { merge: true });
+  };
+
+  // ฟังก์ชั่นจัดการการรีเซ็ตคิวทั้งหมดผ่านรหัสผ่าน 1234
+  const handleConfirmReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (resetPassword !== "1234") {
+      setResetError("รหัสผ่านไม่ถูกต้อง!");
+      return;
+    }
+
+    setIsResetting(true);
+    setResetError("");
+
+    try {
+      // 1. ดึงคิวที่ค้างรอคิวอยู่ (WAITING หรือ CALLED) ของวันนี้
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const startTimestamp = Timestamp.fromDate(todayStart);
+
+      const q = query(
+        collection(db, "queues"),
+        where("branchId", "==", branchId),
+        where("createdAt", ">=", startTimestamp)
+      );
+
+      const snapshot = await getDocs(q);
+      const batch = writeBatch(db);
+
+      // 2. เคลียร์คิวที่ค้างให้เปลี่ยนเป็น CANCELLED
+      snapshot.docs.forEach((docSnap) => {
+        const data = docSnap.data();
+        if (data.status === "WAITING" || data.status === "CALLED") {
+          batch.update(docSnap.ref, {
+            status: "CANCELLED",
+            cancelledAt: serverTimestamp(),
+          });
+        }
+      });
+
+      // 3. รีเซ็ตหน้าจอ Display เคาน์เตอร์หน้าร้านให้เป็นว่าง
+      const examCounterRef = doc(db, "counters", `${branchId}_exam_room`);
+      const salesCounterRef = doc(db, "counters", `${branchId}_sales_counter`);
+      batch.set(examCounterRef, { currentServing: "-" }, { merge: true });
+      batch.set(salesCounterRef, { currentServing: "-" }, { merge: true });
+
+      await batch.commit();
+
+      setResetModalOpen(false);
+      setResetPassword("");
+      alert("รีเซ็ตสถานะคิวประจำวันเรียบร้อยแล้ว!");
+    } catch (error) {
+      console.error("Error resetting queues:", error);
+      alert("เกิดข้อผิดพลาดในการรีเซ็ตคิว");
+    } finally {
+      setIsResetting(false);
+    }
   };
 
   // ฟังก์ชั่นส่งเสียงเรียกคิวสองภาษา
@@ -467,7 +529,20 @@ export default function AdminDashboardPage() {
             </h1>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
+            {/* ปุ่มรีเซ็ตคิวด้วยรหัสผ่าน */}
+            <button
+              onClick={() => {
+                setResetModalOpen(true);
+                setResetPassword("");
+                setResetError("");
+              }}
+              className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-xl font-bold text-xs transition flex items-center gap-1.5 shadow-sm active:scale-95"
+            >
+              🔄 รีเซ็ตคิว
+            </button>
+
+            {/* ปุ่มเปิด-ปิด คิวสำรอง */}
             <button
               onClick={toggleReserve}
               className={`px-4 py-2 rounded-xl font-bold text-xs transition flex items-center gap-2 ${
@@ -581,6 +656,66 @@ export default function AdminDashboardPage() {
                   className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs transition shadow-md active:scale-95 disabled:opacity-50"
                 >
                   {isSaving ? "กำลังบันทึก..." : "💾 บันทึกข้อมูล"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ป๊อปอัป Modal ยืนยันรหัสผ่านเพื่อรีเซ็ตคิว */}
+      {resetModalOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 space-y-4">
+            <div className="flex justify-between items-center border-b border-gray-100 pb-3">
+              <h3 className="font-extrabold text-red-600 text-base flex items-center gap-1.5">
+                🔒 ยืนยันรหัสผ่านเพื่อรีเซ็ตคิว
+              </h3>
+              <button
+                onClick={() => setResetModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600 text-lg font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-gray-500 font-medium leading-relaxed">
+              การรีเซ็ตจะทำการยกเลิกคิวที่ค้างรอคิวทั้งหมดของวันนี้ <br />
+              กรุณากรอกรหัสผ่านเพื่อยืนยันการทำรายการ
+            </p>
+
+            <form onSubmit={handleConfirmReset} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  รหัสผ่านอนุมัติ
+                </label>
+                <input
+                  type="password"
+                  placeholder="กรอกรหัสผ่าน (เช่น 1234)"
+                  value={resetPassword}
+                  onChange={(e) => setResetPassword(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-red-500 text-sm font-extrabold tracking-widest text-gray-800"
+                  autoFocus
+                />
+                {resetError && (
+                  <p className="text-xs font-bold text-red-500 mt-1.5">{resetError}</p>
+                )}
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setResetModalOpen(false)}
+                  className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl text-xs transition"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="submit"
+                  disabled={isResetting}
+                  className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-xs transition shadow-md active:scale-95 disabled:opacity-50"
+                >
+                  {isResetting ? "กำลังรีเซ็ต..." : "ยืนยันรีเซ็ต"}
                 </button>
               </div>
             </form>
