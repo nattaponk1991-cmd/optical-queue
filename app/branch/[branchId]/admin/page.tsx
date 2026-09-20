@@ -43,7 +43,7 @@ export default function AdminDashboardPage() {
     await setDoc(branchRef, { allowReserve: !allowReserve }, { merge: true });
   };
 
-  // ฟังก์ชั่นส่งเสียงเรียกคิว (ปรับสำเนียงไทยให้ฟังง่าย นุ่มนวล และเพิ่มสถานที่ภาษาอังกฤษ)
+  // ฟังก์ชั่นส่งเสียงเรียกคิว
   const speakQueue = (queueNumber: string, lang: "TH" | "EN" = "TH", queueType: string = "A") => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
 
@@ -54,7 +54,6 @@ export default function AdminDashboardPage() {
 
     let text = "";
     if (lang === "TH") {
-      // ไทย: A, B ไปห้องวัดสายตา / C, D ติดต่อเจ้าหน้าที่ (ตัดคำว่า คิว และ โปรด ออก)
       const destination = (queueType === "A" || queueType === "B") 
         ? "ที่ห้องวัดสายตาค่ะ" 
         : "ติดต่อเจ้าหน้าที่ค่ะ";
@@ -67,7 +66,6 @@ export default function AdminDashboardPage() {
 
       text = `ขอเชิญหมายเลข ${formattedNumber} ${destination}`;
     } else {
-      // อังกฤษ: A, B ไป examination room / C, D ติดต่อพนักงาน (contact our staff)
       const enDestination = (queueType === "A" || queueType === "B")
         ? "please step forward to the examination room."
         : "please contact our staff.";
@@ -78,7 +76,6 @@ export default function AdminDashboardPage() {
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = lang === "TH" ? "th-TH" : "en-US";
     
-    // ไทย: ความเร็ว 0.82 (จังหวะอ่านกำลังพอดี) + ปรับระดับเสียง 1.15
     utterance.rate = lang === "TH" ? 0.82 : 0.88;
     utterance.pitch = lang === "TH" ? 1.15 : 1.0;
     utterance.volume = 1;
@@ -116,6 +113,28 @@ export default function AdminDashboardPage() {
 
     } catch (error) {
       console.error("Error calling queue:", error);
+    }
+  };
+
+  // ฟังก์ชั่นให้พนักงานแก้ไขชื่อและเบอร์โทรศัพท์ลูกค้าเพิ่มเติม
+  const handleEditCustomerInfo = async (queue: any) => {
+    const currentName = queue.customerName || "";
+    const currentPhone = queue.phoneNumber || "";
+
+    const newName = prompt(`แก้ไขชื่อลูกค้า สำหรับคิว ${queue.queueNumber}:`, currentName);
+    if (newName === null) return; // กดยกเลิก
+
+    const newPhone = prompt(`แก้ไขเบอร์โทรศัพท์ สำหรับคิว ${queue.queueNumber}:`, currentPhone);
+    if (newPhone === null) return; // กดยกเลิก
+
+    try {
+      await updateDoc(doc(db, "queues", queue.id), {
+        customerName: newName.trim(),
+        phoneNumber: newPhone.trim(),
+      });
+    } catch (error) {
+      console.error("Error updating customer info:", error);
+      alert("เกิดข้อผิดพลาดในการบันทึกข้อมูล");
     }
   };
 
@@ -199,10 +218,22 @@ export default function AdminDashboardPage() {
             {callingQueue ? (
               <div className="mt-2">
                 <p className="text-4xl font-black text-blue-600">{callingQueue.queueNumber}</p>
-                <p className="text-sm font-bold text-gray-800 mt-1">{callingQueue.customerName || "ไม่ระบุชื่อ"}</p>
-                <p className="text-xs text-gray-500">{callingQueue.phoneNumber || "ไม่มีเบอร์"}</p>
+                <p className="text-sm font-bold text-gray-800 mt-1">
+                  {callingQueue.customerName || "ไม่ระบุชื่อ"}
+                </p>
+                <p className="text-xs text-gray-500 mb-2">
+                  {callingQueue.phoneNumber || "ไม่มีเบอร์"}
+                </p>
 
-                <div className="mt-2 inline-block bg-orange-50 border border-orange-100 px-3 py-1 rounded-lg">
+                {/* ปุ่มแก้ไขข้อมูลคิวปัจจุบัน */}
+                <button
+                  onClick={() => handleEditCustomerInfo(callingQueue)}
+                  className="mb-2 text-[11px] font-bold text-blue-600 hover:text-blue-800 bg-blue-50 px-2 py-1 rounded-md transition"
+                >
+                  ✏️ แก้ไขชื่อ/เบอร์
+                </button>
+
+                <div className="block bg-orange-50 border border-orange-100 px-3 py-1 rounded-lg">
                   <p className="text-xs font-bold text-orange-600">
                     ⏱️ เรียกเมื่อ: {formatTime(callingQueue.calledAt)}
                   </p>
@@ -268,7 +299,15 @@ export default function AdminDashboardPage() {
                   >
                     <div>
                       <span className="font-extrabold text-sm text-gray-800">{item.queueNumber}</span>
-                      <span className="text-xs text-gray-500 ml-2">{item.customerName || "รอลงทะเบียน"}</span>
+                      <span className="text-xs text-gray-500 ml-1.5">{item.customerName || "รอลงทะเบียน"}</span>
+                      {/* ปุ่มแก้ไขข้อมูลคิวรอ */}
+                      <button
+                        onClick={() => handleEditCustomerInfo(item)}
+                        className="ml-2 text-[10px] text-blue-600 hover:underline font-semibold"
+                        title="แก้ไขข้อมูลลูกค้า"
+                      >
+                        ✏️ แก้ไข
+                      </button>
                     </div>
                     <div className="flex gap-1">
                       <button
