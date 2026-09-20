@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { collection, query, where, onSnapshot, doc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { collection, query, where, onSnapshot, doc, updateDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 export default function AdminDashboardPage() {
@@ -40,35 +40,35 @@ export default function AdminDashboardPage() {
 
   const toggleReserve = async () => {
     const branchRef = doc(db, "branches", branchId);
-    await updateDoc(branchRef, { allowReserve: !allowReserve });
+    await setDoc(branchRef, { allowReserve: !allowReserve }, { merge: true });
   };
 
-  // ฟังก์ชั่นส่งเสียงเรียกคิวแบบการันตีเสียงออกลำโพง 100%
-  const speakQueue = (queueNumber: string, lang: "TH" | "EN" = "TH", isRecall = false) => {
+  // ฟังก์ชั่นส่งเสียงเรียกคิวแบบธรรมชาติ (ตัดคำว่าอีกครั้งออก และปรับการอ่านเลขคิว)
+  const speakQueue = (queueNumber: string, lang: "TH" | "EN" = "TH", queueType: string = "A") => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
 
-    // แก้ปัญหา SpeechSynthesis ค้างคิวใน Chrome
     window.speechSynthesis.cancel();
     if (window.speechSynthesis.paused) {
       window.speechSynthesis.resume();
     }
 
+    // กำหนดสถานที่ปลายทางตามประเภทคิว
+    const destination = (queueType === "A" || queueType === "B") ? "ที่ห้องวัดสายตาค่ะ" : "ที่เคาน์เตอร์บริการค่ะ";
+
     let text = "";
     if (lang === "TH") {
-      text = isRecall 
-        ? `ขอเชิญหมายเลขคิว ${queueNumber.split("").join(" ")} อีกครั้งค่ะ` 
-        : `ขอเชิญหมายเลขคิว ${queueNumber.split("").join(" ")} ที่ห้องวัดสายตาค่ะ`;
+      // อ่านเลขคิวอย่างเป็นธรรมชาติ เช่น "ขอเชิญหมายเลขคิว A006 ที่ห้องวัดสายตาค่ะ"
+      text = `ขอเชิญหมายเลขคิว ${queueNumber} ${destination}`;
     } else {
       text = `Queue number ${queueNumber.split("").join(" ")}, please step forward to the examination room.`;
     }
 
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = lang === "TH" ? "th-TH" : "en-US";
-    utterance.rate = 0.85;
+    utterance.rate = 0.9;
     utterance.volume = 1;
     utterance.pitch = 1;
 
-    // ดึงรายการเสียงที่ Chrome โหลดไว้แล้ว
     const voices = window.speechSynthesis.getVoices();
     if (voices.length > 0) {
       const targetLang = lang === "TH" ? "th" : "en";
@@ -78,12 +78,15 @@ export default function AdminDashboardPage() {
       }
     }
 
-    // สั่งเล่นเสียง
     window.speechSynthesis.speak(utterance);
   };
 
-  const handleCallQueue = async (queue: any, lang: "TH" | "EN" = "TH", isRecall = false) => {
+  const handleCallQueue = async (queue: any, lang: "TH" | "EN" = "TH") => {
     try {
+      // 1. ส่งเสียงเรียกคิว
+      speakQueue(queue.queueNumber, lang, queue.type);
+
+      // 2. อัปเดตสถานะใน Firestore
       await updateDoc(doc(db, "queues", queue.id), {
         status: "CALLED",
         calledAt: serverTimestamp(),
@@ -93,11 +96,10 @@ export default function AdminDashboardPage() {
         ? `${branchId}_exam_room`
         : `${branchId}_sales_counter`;
 
-      await updateDoc(doc(db, "counters", counterId), {
+      await setDoc(doc(db, "counters", counterId), {
         currentServing: queue.queueNumber,
-      });
+      }, { merge: true });
 
-      speakQueue(queue.queueNumber, lang, isRecall);
     } catch (error) {
       console.error("Error calling queue:", error);
     }
@@ -195,13 +197,13 @@ export default function AdminDashboardPage() {
                 <div className="space-y-2 mt-4">
                   <div className="grid grid-cols-2 gap-2">
                     <button
-                      onClick={() => handleCallQueue(callingQueue, "TH", true)}
+                      onClick={() => handleCallQueue(callingQueue, "TH")}
                       className="py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg text-xs transition shadow-sm active:scale-95"
                     >
                       🇹🇭 เรียกซ้ำ (TH)
                     </button>
                     <button
-                      onClick={() => handleCallQueue(callingQueue, "EN", true)}
+                      onClick={() => handleCallQueue(callingQueue, "EN")}
                       className="py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs transition shadow-sm active:scale-95"
                     >
                       🇬🇧 Call (EN)
@@ -331,14 +333,14 @@ export default function AdminDashboardPage() {
 
                       <div className="flex gap-1">
                         <button
-                          onClick={() => handleCallQueue(item, "TH", true)}
+                          onClick={() => handleCallQueue(item, "TH")}
                           className="py-1 px-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-md transition text-[11px]"
                           title="ดึงกลับมาเรียกภาษาไทย"
                         >
                           🔄 TH
                         </button>
                         <button
-                          onClick={() => handleCallQueue(item, "EN", true)}
+                          onClick={() => handleCallQueue(item, "EN")}
                           className="py-1 px-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-md transition text-[11px]"
                           title="ดึงกลับมาเรียกภาษาอังกฤษ"
                         >
