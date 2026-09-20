@@ -18,6 +18,7 @@ export default function SelectQueueTypePage() {
 
   // ดึงสถานะคิวสำรอง (allowReserve) จาก Firestore แบบ Realtime
   useEffect(() => {
+    if (!branchId) return;
     const branchRef = doc(db, "branches", branchId);
     const unsubscribe = onSnapshot(branchRef, (docSnap) => {
       if (docSnap.exists()) {
@@ -113,7 +114,7 @@ export default function SelectQueueTypePage() {
           <button
             onClick={() => handleSelectType("A")}
             disabled={loading}
-            className="w-full bg-blue-50 hover:bg-blue-100 border-2 border-blue-500 rounded-2xl p-4 text-left transition flex items-center justify-between group shadow-sm"
+            className="w-full bg-blue-50 hover:bg-blue-100 border-2 border-blue-500 rounded-2xl p-4 text-left transition flex items-center justify-between group shadow-sm disabled:opacity-50"
           >
             <div>
               <p className="font-bold text-blue-900 text-base">
@@ -128,13 +129,13 @@ export default function SelectQueueTypePage() {
             </span>
           </button>
 
-          {/* คิว B และ C แสดงผลเฉพาะเมื่อปิดคิวสำรอง (!allowReserve) */}
+          {/* คิว B และ C แสดงผลเฉพาะเมื่อไม่ได้เปิดคิวสำรอง (!allowReserve) */}
           {!allowReserve && (
             <>
               <button
                 onClick={() => handleSelectType("B")}
                 disabled={loading}
-                className="w-full bg-purple-50 hover:bg-purple-100 border-2 border-purple-500 rounded-2xl p-4 text-left transition flex items-center justify-between group shadow-sm"
+                className="w-full bg-purple-50 hover:bg-purple-100 border-2 border-purple-500 rounded-2xl p-4 text-left transition flex items-center justify-between group shadow-sm disabled:opacity-50"
               >
                 <div>
                   <p className="font-bold text-purple-900 text-base">
@@ -152,7 +153,7 @@ export default function SelectQueueTypePage() {
               <button
                 onClick={() => handleSelectType("C")}
                 disabled={loading}
-                className="w-full bg-green-50 hover:bg-green-100 border-2 border-green-500 rounded-2xl p-4 text-left transition flex items-center justify-between group shadow-sm"
+                className="w-full bg-green-50 hover:bg-green-100 border-2 border-green-500 rounded-2xl p-4 text-left transition flex items-center justify-between group shadow-sm disabled:opacity-50"
               >
                 <div>
                   <p className="font-bold text-green-900 text-base">
@@ -174,7 +175,7 @@ export default function SelectQueueTypePage() {
             <button
               onClick={() => handleSelectType("D")}
               disabled={loading}
-              className="w-full bg-orange-50 hover:bg-orange-100 border-2 border-orange-500 rounded-2xl p-4 text-left transition flex items-center justify-between group shadow-sm animate-fade-in"
+              className="w-full bg-orange-50 hover:bg-orange-100 border-2 border-orange-500 rounded-2xl p-4 text-left transition flex items-center justify-between group shadow-sm disabled:opacity-50"
             >
               <div>
                 <p className="font-bold text-orange-900 text-base">
@@ -190,11 +191,6 @@ export default function SelectQueueTypePage() {
             </button>
           )}
         </div>
-
-        {/* หมายเหตุเงื่อนไขเวลาสละสิทธิ์ */}
-        <p className="mt-4 text-center text-xs font-semibold text-red-500 bg-red-50 py-2 px-3 rounded-xl border border-red-100">
-          * หากถึงคิวแล้วไม่แสดงตนภายใน 5 นาที ถือว่าท่านสละสิทธิ์
-        </p>
 
         {/* ปุ่มค้นหาคิวเดิม */}
         <div className="mt-6 pt-6 border-t border-gray-100 text-center">

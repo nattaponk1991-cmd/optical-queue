@@ -109,6 +109,12 @@ export default function QueueStatusPage() {
     }
   };
 
+  const formatTime = (timestamp: any) => {
+    if (!timestamp) return "";
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp.seconds * 1000);
+    return date.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }) + " น.";
+  };
+
   if (!myQueue) return <div className="min-h-screen flex items-center justify-center bg-gray-50 text-gray-500 font-medium">กำลังโหลดข้อมูล...</div>;
 
   // กรณีลูกค้ายังไม่ได้ลงทะเบียน ชื่อ-เบอร์โทร
@@ -174,8 +180,13 @@ export default function QueueStatusPage() {
         </div>
 
         {myQueue.status === "CALLED" && (
-          <div className="bg-green-100 text-green-800 p-4 rounded-lg font-bold mb-6 text-lg animate-pulse border border-green-300">
-            ถึงคิวของคุณแล้ว! กรุณาติดต่อพนักงานค่ะ/ครับ
+          <div className="bg-green-100 text-green-800 p-4 rounded-xl font-bold mb-6 text-center border border-green-300 animate-pulse">
+            <p className="text-lg">ถึงคิวของคุณแล้ว! กรุณาติดต่อพนักงานค่ะ/ครับ</p>
+            {myQueue.calledAt && (
+              <p className="text-xs text-green-700 mt-1 font-semibold">
+                ⏱️ เรียกเมื่อเวลา: {formatTime(myQueue.calledAt)}
+              </p>
+            )}
           </div>
         )}
 
