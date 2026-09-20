@@ -12,11 +12,24 @@ export default function AdminDashboardPage() {
   const [allowReserve, setAllowReserve] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [showHistory, setShowHistory] = useState<{ [key: string]: boolean }>({});
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+
+  // โหลดรายการเสียง (Voices) ของระบบ
+  useEffect(() => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+
+    const updateVoices = () => {
+      const availableVoices = window.speechSynthesis.getVoices();
+      setVoices(availableVoices);
+    };
+
+    updateVoices();
+    window.speechSynthesis.onvoiceschanged = updateVoices;
+  }, []);
 
   useEffect(() => {
     if (!branchId) return;
 
-    // แก้ไขจุดซ้อน doc(...) เรียบร้อยแล้ว
     const branchRef = doc(db, "branches", branchId);
     const unsubBranch = onSnapshot(branchRef, (docSnap) => {
       if (docSnap.exists()) {
@@ -44,10 +57,11 @@ export default function AdminDashboardPage() {
     await updateDoc(branchRef, { allowReserve: !allowReserve });
   };
 
-  // ฟังก์ชั่นส่งเสียงเรียกคิว (TTS) รองรับภาษา TH และ EN
+  // ฟังก์ชั่นส่งเสียงเรียกคิว (TTS) ปรับปรุงให้ดึง Voice Object จากระบบโดยตรง
   const speakQueue = (queueNumber: string, lang: "TH" | "EN" = "TH", isRecall = false) => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
 
+    // ยกเลิกเสียงที่ค้างอยู่
     window.speechSynthesis.cancel();
 
     let text = "";
@@ -64,6 +78,16 @@ export default function AdminDashboardPage() {
     utterance.rate = 0.9;
     utterance.volume = 1;
 
+    // ค้นหา Voice Object จากเบราว์เซอร์ที่ตรงกับภาษา
+    const currentVoices = voices.length > 0 ? voices : window.speechSynthesis.getVoices();
+    const targetLang = lang === "TH" ? "th" : "en";
+    const selectedVoice = currentVoices.find((v) => v.lang.toLowerCase().includes(targetLang));
+
+    if (selectedVoice) {
+      utterance.voice = selectedVoice;
+    }
+
+    // สั่งรันเสียง
     window.speechSynthesis.speak(utterance);
   };
 
@@ -181,13 +205,13 @@ export default function AdminDashboardPage() {
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       onClick={() => handleCallQueue(callingQueue, "TH", true)}
-                      className="py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg text-xs transition shadow-sm"
+                      className="py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg text-xs transition shadow-sm active:scale-95"
                     >
                       🇹🇭 เรียกซ้ำ (TH)
                     </button>
                     <button
                       onClick={() => handleCallQueue(callingQueue, "EN", true)}
-                      className="py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs transition shadow-sm"
+                      className="py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs transition shadow-sm active:scale-95"
                     >
                       🇬🇧 Call (EN)
                     </button>
@@ -195,7 +219,7 @@ export default function AdminDashboardPage() {
 
                   <button
                     onClick={() => handleCompleteQueue(callingQueue.id)}
-                    className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs transition shadow-sm"
+                    className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs transition shadow-sm active:scale-95"
                   >
                     ✓ เสร็จสิ้น
                   </button>
@@ -242,14 +266,14 @@ export default function AdminDashboardPage() {
                     <div className="flex gap-1">
                       <button
                         onClick={() => handleCallQueue(item, "TH")}
-                        className="py-1 px-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs transition"
+                        className="py-1 px-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs transition active:scale-95"
                         title="เรียกคิวภาษาไทย"
                       >
                         🇹🇭 เรียก
                       </button>
                       <button
                         onClick={() => handleCallQueue(item, "EN")}
-                        className="py-1 px-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-xs transition"
+                        className="py-1 px-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-xs transition active:scale-95"
                         title="Call English"
                       >
                         🇬🇧 EN
