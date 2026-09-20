@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { collection, query, where, onSnapshot, doc, updateDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { collection, query, where, onSnapshot, doc, updateDoc, setDoc, serverTimestamp, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 export default function AdminDashboardPage() {
@@ -29,7 +29,18 @@ export default function AdminDashboardPage() {
       }
     });
 
-    const q = query(collection(db, "queues"), where("branchId", "==", branchId));
+    // กำหนดเวลาเริ่มต้นของวันนี้ (Today 00:00:00)
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const startTimestamp = Timestamp.fromDate(todayStart);
+
+    // ดึงเฉพาะคิวที่สร้างขึ้นตั้งแต่วันนี้เป็นต้นไป
+    const q = query(
+      collection(db, "queues"),
+      where("branchId", "==", branchId),
+      where("createdAt", ">=", startTimestamp)
+    );
+
     const unsubQueues = onSnapshot(q, (snapshot) => {
       const list: any[] = [];
       snapshot.forEach((docSnap: any) => {
@@ -112,14 +123,12 @@ export default function AdminDashboardPage() {
     return !queue.customerName || queue.customerName.trim() === "" || queue.customerName === "ไม่ระบุชื่อ" || queue.customerName === "รอลงทะเบียน";
   };
 
-  // เปิด Modal แก้ไขข้อมูล
   const openEditModal = (queue: any) => {
     setEditingQueue(queue);
     setInputName(queue.customerName && queue.customerName !== "ไม่ระบุชื่อ" && queue.customerName !== "รอลงทะเบียน" ? queue.customerName : "");
     setInputPhone(queue.phoneNumber && queue.phoneNumber !== "ไม่มีเบอร์" ? queue.phoneNumber : "");
   };
 
-  // บันทึกข้อมูลลูกค้าจาก Modal
   const handleSaveCustomerInfo = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingQueue) return;
