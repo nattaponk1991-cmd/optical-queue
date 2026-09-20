@@ -12,20 +12,6 @@ export default function AdminDashboardPage() {
   const [allowReserve, setAllowReserve] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [showHistory, setShowHistory] = useState<{ [key: string]: boolean }>({});
-  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
-
-  // โหลดรายการเสียงของระบบรองรับ Chrome/Safari บน macOS
-  useEffect(() => {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-
-    const loadVoices = () => {
-      const availableVoices = window.speechSynthesis.getVoices();
-      setVoices(availableVoices);
-    };
-
-    loadVoices();
-    window.speechSynthesis.onvoiceschanged = loadVoices;
-  }, []);
 
   useEffect(() => {
     if (!branchId) return;
@@ -57,7 +43,7 @@ export default function AdminDashboardPage() {
     await setDoc(branchRef, { allowReserve: !allowReserve }, { merge: true });
   };
 
-  // ฟังก์ชั่นส่งเสียงเรียกคิวสองภาษา เสถียร 100%
+  // ฟังก์ชั่นส่งเสียงเรียกคิวแบบแปลงเป็นข้อความภาษาไทยล้วน (แก้ปัญหา Chrome อ่านเป็นอังกฤษ)
   const speakQueue = (queueNumber: string, lang: "TH" | "EN" = "TH", queueType: string = "A") => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
 
@@ -72,13 +58,19 @@ export default function AdminDashboardPage() {
         ? "ที่ห้องวัดสายตาค่ะ" 
         : "ติดต่อเจ้าหน้าที่ค่ะ";
 
-      let formattedNumber = queueNumber;
-      if (queueNumber.startsWith("A")) formattedNumber = queueNumber.replace("A", "เอ");
-      else if (queueNumber.startsWith("B")) formattedNumber = queueNumber.replace("B", "บี");
-      else if (queueNumber.startsWith("C")) formattedNumber = queueNumber.replace("C", "ซี");
-      else if (queueNumber.startsWith("D")) formattedNumber = queueNumber.replace("D", "ดี");
+      // แปลงตัวอักษรและตัวเลขทั้งหมดให้เป็นคำอ่านภาษาไทยล้วน
+      const numberMap: { [key: string]: string } = {
+        '0': 'ศูนย์', '1': 'หนึ่ง', '2': 'สอง', '3': 'สาม', '4': 'สี่',
+        '5': 'ห้า', '6': 'หก', '7': 'เจ็ด', '8': 'แปด', '9': 'เก้า',
+        'A': 'เอ', 'B': 'บี', 'C': 'ซี', 'D': 'ดี'
+      };
 
-      text = `ขอเชิญหมายเลข ${formattedNumber} ${destination}`;
+      const thaiFormattedNumber = queueNumber
+        .split('')
+        .map(char => numberMap[char] || char)
+        .join('');
+
+      text = `ขอเชิญหมายเลข ${thaiFormattedNumber} ${destination}`;
     } else {
       const enDestination = (queueType === "A" || queueType === "B")
         ? "please step forward to the examination room."
@@ -93,19 +85,19 @@ export default function AdminDashboardPage() {
     utterance.pitch = lang === "TH" ? 1.15 : 1.0;
     utterance.volume = 1;
 
-    // ดึงรายการเสียงที่พร้อมใช้งานสดๆ
-    const currentVoices = voices.length > 0 ? voices : window.speechSynthesis.getVoices();
-    
-    if (lang === "TH") {
-      // ค้นหาเสียงภาษาไทยแท้ Kanya หรือ th-TH
-      const thaiVoice = currentVoices.find((v) => v.lang.toLowerCase().includes("th") || v.name.includes("Kanya"));
-      if (thaiVoice) {
-        utterance.voice = thaiVoice;
-      }
-    } else {
-      const enVoice = currentVoices.find((v) => v.lang.toLowerCase().startsWith("en"));
-      if (enVoice) {
-        utterance.voice = enVoice;
+    // ค้นหาเสียงโดยเจาะจง th-TH เพื่อไม่ให้ติดเสียงพากย์อังกฤษ Fallback
+    const voices = window.speechSynthesis.getVoices();
+    if (voices.length > 0) {
+      if (lang === "TH") {
+        const thaiVoice = voices.find((v) => v.lang === "th-TH" || v.lang === "th_TH" || v.lang.startsWith("th"));
+        if (thaiVoice) {
+          utterance.voice = thaiVoice;
+        }
+      } else {
+        const enVoice = voices.find((v) => v.lang.startsWith("en"));
+        if (enVoice) {
+          utterance.voice = enVoice;
+        }
       }
     }
 
