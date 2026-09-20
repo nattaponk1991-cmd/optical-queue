@@ -13,6 +13,12 @@ export default function AdminDashboardPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [showHistory, setShowHistory] = useState<{ [key: string]: boolean }>({});
 
+  // State สำหรับ Modal แก้ไขข้อมูลลูกค้า
+  const [editingQueue, setEditingQueue] = useState<any | null>(null);
+  const [inputName, setInputName] = useState("");
+  const [inputPhone, setInputPhone] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+
   useEffect(() => {
     if (!branchId) return;
 
@@ -43,7 +49,7 @@ export default function AdminDashboardPage() {
     await setDoc(branchRef, { allowReserve: !allowReserve }, { merge: true });
   };
 
-  // ฟังก์ชั่นส่งเสียงเรียกคิวแบบแปลงเป็นข้อความภาษาไทยล้วน (แก้ปัญหา Chrome อ่านเป็นอังกฤษ)
+  // ฟังก์ชั่นส่งเสียงเรียกคิวสองภาษา
   const speakQueue = (queueNumber: string, lang: "TH" | "EN" = "TH", queueType: string = "A") => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
 
@@ -58,7 +64,6 @@ export default function AdminDashboardPage() {
         ? "ที่ห้องวัดสายตาค่ะ" 
         : "ติดต่อเจ้าหน้าที่ค่ะ";
 
-      // แปลงตัวอักษรและตัวเลขทั้งหมดให้เป็นคำอ่านภาษาไทยล้วน
       const numberMap: { [key: string]: string } = {
         '0': 'ศูนย์', '1': 'หนึ่ง', '2': 'สอง', '3': 'สาม', '4': 'สี่',
         '5': 'ห้า', '6': 'หก', '7': 'เจ็ด', '8': 'แปด', '9': 'เก้า',
@@ -85,7 +90,6 @@ export default function AdminDashboardPage() {
     utterance.pitch = lang === "TH" ? 1.15 : 1.0;
     utterance.volume = 1;
 
-    // ค้นหาเสียงโดยเจาะจง th-TH เพื่อไม่ให้ติดเสียงพากย์อังกฤษ Fallback
     const voices = window.speechSynthesis.getVoices();
     if (voices.length > 0) {
       if (lang === "TH") {
@@ -108,24 +112,30 @@ export default function AdminDashboardPage() {
     return !queue.customerName || queue.customerName.trim() === "" || queue.customerName === "ไม่ระบุชื่อ" || queue.customerName === "รอลงทะเบียน";
   };
 
-  const handleEditCustomerInfo = async (queue: any) => {
-    const currentName = queue.customerName || "";
-    const currentPhone = queue.phoneNumber || "";
+  // เปิด Modal แก้ไขข้อมูล
+  const openEditModal = (queue: any) => {
+    setEditingQueue(queue);
+    setInputName(queue.customerName && queue.customerName !== "ไม่ระบุชื่อ" && queue.customerName !== "รอลงทะเบียน" ? queue.customerName : "");
+    setInputPhone(queue.phoneNumber && queue.phoneNumber !== "ไม่มีเบอร์" ? queue.phoneNumber : "");
+  };
 
-    const newName = prompt(`กรอกชื่อลูกค้า สำหรับคิว ${queue.queueNumber}:`, currentName);
-    if (newName === null) return;
+  // บันทึกข้อมูลลูกค้าจาก Modal
+  const handleSaveCustomerInfo = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingQueue) return;
 
-    const newPhone = prompt(`กรอกเบอร์โทรศัพท์ สำหรับคิว ${queue.queueNumber}:`, currentPhone);
-    if (newPhone === null) return;
-
+    setIsSaving(true);
     try {
-      await updateDoc(doc(db, "queues", queue.id), {
-        customerName: newName.trim(),
-        phoneNumber: newPhone.trim(),
+      await updateDoc(doc(db, "queues", editingQueue.id), {
+        customerName: inputName.trim() || "ไม่ระบุชื่อ",
+        phoneNumber: inputPhone.trim() || "ไม่มีเบอร์",
       });
+      setEditingQueue(null);
     } catch (error) {
       console.error("Error updating customer info:", error);
       alert("เกิดข้อผิดพลาดในการบันทึกข้อมูล");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -240,7 +250,7 @@ export default function AdminDashboardPage() {
 
                 {isUnregistered(callingQueue) && (
                   <button
-                    onClick={() => handleEditCustomerInfo(callingQueue)}
+                    onClick={() => openEditModal(callingQueue)}
                     className="mb-2 text-[11px] font-bold text-blue-600 hover:text-blue-800 bg-blue-50 px-2.5 py-1 rounded-md transition border border-blue-100"
                   >
                     ✏️ เติมชื่อ/เบอร์
@@ -317,7 +327,7 @@ export default function AdminDashboardPage() {
                       
                       {isUnregistered(item) && (
                         <button
-                          onClick={() => handleEditCustomerInfo(item)}
+                          onClick={() => openEditModal(item)}
                           className="ml-2 text-[10px] text-blue-600 hover:underline font-semibold"
                           title="เติมข้อมูลลูกค้า"
                         >
@@ -381,7 +391,7 @@ export default function AdminDashboardPage() {
                           
                           {isUnregistered(item) && (
                             <button
-                              onClick={() => handleEditCustomerInfo(item)}
+                              onClick={() => openEditModal(item)}
                               className="text-[10px] text-blue-600 hover:underline font-semibold ml-1"
                               title="เติมข้อมูลลูกค้า"
                             >
@@ -503,6 +513,71 @@ export default function AdminDashboardPage() {
           {renderQueueSection("D", "🟠 คิว D (สำรอง)", "border-orange-500")}
         </div>
       </div>
+
+      {/* ป๊อปอัป Modal สำหรับกรอกข้อมูลชื่อ + เบอร์โทรศัพท์พร้อมกัน */}
+      {editingQueue && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 space-y-4">
+            <div className="flex justify-between items-center border-b border-gray-100 pb-3">
+              <h3 className="font-extrabold text-gray-800 text-base">
+                📝 เติมข้อมูลลูกค้า (คิว {editingQueue.queueNumber})
+              </h3>
+              <button
+                onClick={() => setEditingQueue(null)}
+                className="text-gray-400 hover:text-gray-600 text-lg font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveCustomerInfo} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  ชื่อ - นามสกุล
+                </label>
+                <input
+                  type="text"
+                  placeholder="กรอกชื่อลูกค้า"
+                  value={inputName}
+                  onChange={(e) => setInputName(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium text-gray-800"
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  เบอร์โทรศัพท์
+                </label>
+                <input
+                  type="tel"
+                  placeholder="กรอกเบอร์โทรศัพท์ (เช่น 0812345678)"
+                  value={inputPhone}
+                  onChange={(e) => setInputPhone(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium text-gray-800"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingQueue(null)}
+                  className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl text-xs transition"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSaving}
+                  className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs transition shadow-md active:scale-95 disabled:opacity-50"
+                >
+                  {isSaving ? "กำลังบันทึก..." : "💾 บันทึกข้อมูล"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
