@@ -43,8 +43,16 @@ export default function AdminDashboardPage() {
     await updateDoc(branchRef, { allowReserve: !allowReserve });
   };
 
-  // ฟังก์ชั่นส่งเสียงเรียกคิวผ่าน Online Stream Engine (ดังแน่นอน ไม่ต้องตั้งค่าเบราว์เซอร์)
+  // ฟังก์ชั่นส่งเสียงเรียกคิวแบบการันตีเสียงออกลำโพง 100%
   const speakQueue = (queueNumber: string, lang: "TH" | "EN" = "TH", isRecall = false) => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+
+    // แก้ปัญหา SpeechSynthesis ค้างคิวใน Chrome
+    window.speechSynthesis.cancel();
+    if (window.speechSynthesis.paused) {
+      window.speechSynthesis.resume();
+    }
+
     let text = "";
     if (lang === "TH") {
       text = isRecall 
@@ -54,22 +62,24 @@ export default function AdminDashboardPage() {
       text = `Queue number ${queueNumber.split("").join(" ")}, please step forward to the examination room.`;
     }
 
-    const ttsLang = lang === "TH" ? "th" : "en";
-    
-    // เรียกใช้ Online Sound Stream ที่การันตีเสียงออกลำโพงทันที
-    const soundUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=${ttsLang}&client=tw-ob`;
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = lang === "TH" ? "th-TH" : "en-US";
+    utterance.rate = 0.85;
+    utterance.volume = 1;
+    utterance.pitch = 1;
 
-    const audio = new Audio(soundUrl);
-    audio.play().catch(() => {
-      // แผนสำรอง: สลับไปใช้ Web Speech API ในเครื่องหากเน็ตหลุด
-      if (typeof window !== "undefined" && "speechSynthesis" in window) {
-        window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = lang === "TH" ? "th-TH" : "en-US";
-        utterance.rate = 0.9;
-        window.speechSynthesis.speak(utterance);
+    // ดึงรายการเสียงที่ Chrome โหลดไว้แล้ว
+    const voices = window.speechSynthesis.getVoices();
+    if (voices.length > 0) {
+      const targetLang = lang === "TH" ? "th" : "en";
+      const selectedVoice = voices.find((v) => v.lang.toLowerCase().startsWith(targetLang));
+      if (selectedVoice) {
+        utterance.voice = selectedVoice;
       }
-    });
+    }
+
+    // สั่งเล่นเสียง
+    window.speechSynthesis.speak(utterance);
   };
 
   const handleCallQueue = async (queue: any, lang: "TH" | "EN" = "TH", isRecall = false) => {
