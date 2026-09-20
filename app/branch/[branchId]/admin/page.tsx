@@ -43,8 +43,13 @@ export default function AdminDashboardPage() {
     await updateDoc(branchRef, { allowReserve: !allowReserve });
   };
 
-  // ฟังก์ชั่นเรียกเสียงพูดแบบ Hybrid (ลองเล่นผ่าน API / หากไม่ได้ให้สลับไปใช้ Web Speech API เบราว์เซอร์ทันที)
+  // ฟังก์ชั่นส่งเสียงเรียกคิว (Web Speech API)
   const speakQueue = (queueNumber: string, lang: "TH" | "EN" = "TH", isRecall = false) => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+
+    // ยกเลิกเสียงที่ค้างอยู่ก่อนหน้า
+    window.speechSynthesis.cancel();
+
     let text = "";
     if (lang === "TH") {
       text = isRecall 
@@ -54,31 +59,20 @@ export default function AdminDashboardPage() {
       text = `Queue number ${queueNumber.split("").join(" ")}, please step forward to the examination room.`;
     }
 
-    // 1. เล่นผ่าน Web Speech API ของระบบเบราว์เซอร์
-    if (typeof window !== "undefined" && "speechSynthesis" in window) {
-      window.speechSynthesis.cancel(); // ล้างคิวเสียงเก่า
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = lang === "TH" ? "th-TH" : "en-US";
+    utterance.rate = 0.9;
+    utterance.volume = 1;
 
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = lang === "TH" ? "th-TH" : "en-US";
-      utterance.rate = 0.9;
-      utterance.volume = 1;
-
-      // ค้นหา Voice ในเครื่องถ้ามี
-      const voices = window.speechSynthesis.getVoices();
-      const targetLang = lang === "TH" ? "th" : "en";
-      const selectedVoice = voices.find((v) => v.lang.toLowerCase().includes(targetLang));
-      if (selectedVoice) {
-        utterance.voice = selectedVoice;
-      }
-
-      window.speechSynthesis.speak(utterance);
-    } else {
-      // 2. สำรองด้วยการเรียกผ่าน API Route MP3
-      const langParam = lang === "TH" ? "th" : "en";
-      const audioUrl = `/api/tts?text=${encodeURIComponent(text)}&lang=${langParam}`;
-      const audio = new Audio(audioUrl);
-      audio.play().catch((err) => console.error("Audio Playback Error:", err));
+    // ดึงรายการเสียงที่พร้อมใช้งานใน Chrome
+    const voices = window.speechSynthesis.getVoices();
+    const targetLang = lang === "TH" ? "th" : "en";
+    const selectedVoice = voices.find((v) => v.lang.toLowerCase().includes(targetLang));
+    if (selectedVoice) {
+      utterance.voice = selectedVoice;
     }
+
+    window.speechSynthesis.speak(utterance);
   };
 
   const handleCallQueue = async (queue: any, lang: "TH" | "EN" = "TH", isRecall = false) => {
