@@ -116,16 +116,21 @@ export default function AdminDashboardPage() {
     }
   };
 
-  // ฟังก์ชั่นให้พนักงานแก้ไขชื่อและเบอร์โทรศัพท์ลูกค้าเพิ่มเติม
+  // ตรวจสอบว่าคิวนี้ยังไม่ได้กรอกข้อมูลใช่หรือไม่
+  const isUnregistered = (queue: any) => {
+    return !queue.customerName || queue.customerName.trim() === "" || queue.customerName === "ไม่ระบุชื่อ" || queue.customerName === "รอลงทะเบียน";
+  };
+
+  // ฟังก์ชั่นแก้ไขข้อมูลเฉพาะคิวที่ยังไม่ได้ลงทะเบียน
   const handleEditCustomerInfo = async (queue: any) => {
     const currentName = queue.customerName || "";
     const currentPhone = queue.phoneNumber || "";
 
-    const newName = prompt(`แก้ไขชื่อลูกค้า สำหรับคิว ${queue.queueNumber}:`, currentName);
-    if (newName === null) return; // กดยกเลิก
+    const newName = prompt(`กรอกชื่อลูกค้า สำหรับคิว ${queue.queueNumber}:`, currentName);
+    if (newName === null) return;
 
-    const newPhone = prompt(`แก้ไขเบอร์โทรศัพท์ สำหรับคิว ${queue.queueNumber}:`, currentPhone);
-    if (newPhone === null) return; // กดยกเลิก
+    const newPhone = prompt(`กรอกเบอร์โทรศัพท์ สำหรับคิว ${queue.queueNumber}:`, currentPhone);
+    if (newPhone === null) return;
 
     try {
       await updateDoc(doc(db, "queues", queue.id), {
@@ -225,13 +230,15 @@ export default function AdminDashboardPage() {
                   {callingQueue.phoneNumber || "ไม่มีเบอร์"}
                 </p>
 
-                {/* ปุ่มแก้ไขข้อมูลคิวปัจจุบัน */}
-                <button
-                  onClick={() => handleEditCustomerInfo(callingQueue)}
-                  className="mb-2 text-[11px] font-bold text-blue-600 hover:text-blue-800 bg-blue-50 px-2 py-1 rounded-md transition"
-                >
-                  ✏️ แก้ไขชื่อ/เบอร์
-                </button>
+                {/* ปุ่มแก้ไขข้อมูลคิวปัจจุบัน เฉพาะคิวที่ยังไม่ลงทะเบียน */}
+                {isUnregistered(callingQueue) && (
+                  <button
+                    onClick={() => handleEditCustomerInfo(callingQueue)}
+                    className="mb-2 text-[11px] font-bold text-blue-600 hover:text-blue-800 bg-blue-50 px-2.5 py-1 rounded-md transition border border-blue-100"
+                  >
+                    ✏️ เติมชื่อ/เบอร์
+                  </button>
+                )}
 
                 <div className="block bg-orange-50 border border-orange-100 px-3 py-1 rounded-lg">
                   <p className="text-xs font-bold text-orange-600">
@@ -300,14 +307,17 @@ export default function AdminDashboardPage() {
                     <div>
                       <span className="font-extrabold text-sm text-gray-800">{item.queueNumber}</span>
                       <span className="text-xs text-gray-500 ml-1.5">{item.customerName || "รอลงทะเบียน"}</span>
-                      {/* ปุ่มแก้ไขข้อมูลคิวรอ */}
-                      <button
-                        onClick={() => handleEditCustomerInfo(item)}
-                        className="ml-2 text-[10px] text-blue-600 hover:underline font-semibold"
-                        title="แก้ไขข้อมูลลูกค้า"
-                      >
-                        ✏️ แก้ไข
-                      </button>
+                      
+                      {/* แสดงปุ่มแก้ไขเฉพาะคิวที่รอซึ่งยังไม่ลงทะเบียน */}
+                      {isUnregistered(item) && (
+                        <button
+                          onClick={() => handleEditCustomerInfo(item)}
+                          className="ml-2 text-[10px] text-blue-600 hover:underline font-semibold"
+                          title="เติมข้อมูลลูกค้า"
+                        >
+                          ✏️ เติมชื่อ
+                        </button>
+                      )}
                     </div>
                     <div className="flex gap-1">
                       <button
@@ -338,7 +348,7 @@ export default function AdminDashboardPage() {
             </div>
           </div>
 
-          {/* ประวัติคิวที่ผ่านไปแล้ว */}
+          {/* ประวัติคิวที่ผ่านไปแล้ว (ข้าม/ยกเลิก/จบ) */}
           <div className="border-t border-gray-100 pt-3">
             <button
               onClick={() => toggleHistoryDropdown(type)}
@@ -363,6 +373,17 @@ export default function AdminDashboardPage() {
                           {item.queueNumber}
                           <span className="font-normal text-gray-500">({item.customerName || "ไม่ระบุ"})</span>
                           
+                          {/* แสดงปุ่มเติมข้อมูลกรณีคิวที่ข้าม/ยกเลิกแต่ยังไม่มีชื่อ */}
+                          {isUnregistered(item) && (
+                            <button
+                              onClick={() => handleEditCustomerInfo(item)}
+                              className="text-[10px] text-blue-600 hover:underline font-semibold ml-1"
+                              title="เติมข้อมูลลูกค้า"
+                            >
+                              ✏️ เติมชื่อ
+                            </button>
+                          )}
+
                           {item.status === "SKIPPED" && (
                             <span className="text-[10px] bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded font-bold">
                               ข้ามคิว
