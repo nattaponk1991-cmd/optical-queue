@@ -1,237 +1,215 @@
 "use client";
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
-import { doc, onSnapshot, collection, query, where, updateDoc } from "firebase/firestore";
+import { useParams, useRouter } from "next/navigation";
+import { doc, onSnapshot, updateDoc, collection, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 export default function QueueStatusPage() {
   const params = useParams();
-  const branchId = params.branchId as string;
   const queueId = params.queueId as string;
+  const router = useRouter();
 
-  const [myQueue, setMyQueue] = useState<any>(null);
-  const [currentServing, setCurrentServing] = useState<string>("-");
-  const [queuesAhead, setQueuesAhead] = useState<number>(0);
-  const [totalWaiting, setTotalWaiting] = useState<number>(0);
-
-  const [nameInput, setNameInput] = useState("");
-  const [phoneInput, setPhoneInput] = useState("");
-  const [isUpdating, setIsUpdating] = useState(false);
+  const [queue, setQueue] = useState<any>(null);
+  const [waitingCount, setWaitingCount] = useState(0);
+  const [queuesAhead, setQueuesAhead] = useState(0);
+  const [customerName, setCustomerName] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (!queueId) return;
-    const queueRef = doc(db, "queues", queueId);
-    
-    const unsubscribeQueue = onSnapshot(queueRef, (docSnap) => {
+
+    // ติดตามข้อมูลคิวปัจจุบัน
+    const unsubQueue = onSnapshot(doc(db, "queues", queueId), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
-        setMyQueue(data);
-
-        const counterId = (data.type === "A" || data.type === "B") 
-          ? `${branchId}_exam_room` 
-          : `${branchId}_sales_counter`;
-          
-        const counterRef = doc(db, "counters", counterId);
-        
-        onSnapshot(counterRef, (counterSnap) => {
-          if (counterSnap.exists()) {
-            setCurrentServing(counterSnap.data().currentServing);
-          } else {
-            setCurrentServing("รอเรียกคิว");
-          }
-        });
+        setQueue({ id: docSnap.id, ...data });
+        if (data.customerName) setCustomerName(data.customerName);
+        if (data.phoneNumber) setPhoneNumber(data.phoneNumber);
       }
     });
 
-    return () => unsubscribeQueue();
-  }, [branchId, queueId]);
+    return () => unsubQueue();
+  }, [queueId]);
 
   useEffect(() => {
-    if (!myQueue) return;
+    if (!queue) return;
 
+    // คำนวณจำนวนคิวก่อนหน้า
     const q = query(
       collection(db, "queues"),
-      where("branchId", "==", branchId)
+      where("branchId", "==", queue.branchId),
+      where("status", "==", "WAITING")
     );
 
-    const unsubscribeWaiting = onSnapshot(q, (snapshot) => {
-      let aheadCount = 0;
-      let waitingCount = 0;
-      
-      const myTime = myQueue.createdAt?.toMillis() || Date.now();
+    const unsubAllWaiting = onSnapshot(q, (snapshot) => {
+      let totalWaiting = 0;
+      let ahead = 0;
 
       snapshot.forEach((docSnap) => {
         const data = docSnap.data();
-        
-        if (data.status === "WAITING" && data.type === myQueue.type) {
-          waitingCount++;
-          
-          const theirTime = data.createdAt?.toMillis() || 0;
-          if (theirTime < myTime && docSnap.id !== queueId) {
-            aheadCount++;
-          }
+        totalWaiting++;
+
+        if (data.type === queue.type && data.queueNumber < queue.queueNumber) {
+          ahead++;
         }
       });
 
-      setTotalWaiting(waitingCount);
-      setQueuesAhead(aheadCount);
+      setWaitingCount(totalWaiting);
+      setQueuesAhead(ahead);
     });
 
-    return () => unsubscribeWaiting();
-  }, [myQueue, branchId, queueId]);
+    return () => unsubAllWaiting();
+  }, [queue]);
 
-  const handleUpdateInfo = async (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!nameInput.trim() || !phoneInput.trim() || phoneInput.length < 9) {
-      alert("กรุณากรอกข้อมูลให้ครบถ้วนและถูกต้องครับ");
+    if (!customerName.trim() || !phoneNumber.trim()) {
+      alert("กรุณากรอกชื่อและเบอร์โทรศัพท์ให้ครบถ้วน");
       return;
     }
-    setIsUpdating(true);
+
+    setIsSubmitting(true);
     try {
       await updateDoc(doc(db, "queues", queueId), {
-        customerName: nameInput,
-        phoneNumber: phoneInput
+        customerName: customerName.trim(),
+        phoneNumber: phoneNumber.trim(),
       });
+      alert("ลงทะเบียนข้อมูลเรียบร้อยแล้ว!");
     } catch (error) {
-      console.error("Error updating document: ", error);
-      alert("เกิดข้อผิดพลาดในการบันทึกข้อมูล กรุณาลองใหม่ครับ");
-      setIsUpdating(false);
+      console.error("Error updating queue registration:", error);
+      alert("เกิดข้อผิดพลาดในการลงทะเบียน");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const getTypeName = (type: string) => {
-    switch (type) {
-      case "A": return "วัดสายตา (ราคาปกติ)";
-      case "B": return "วัดสายตา (แคมเปญ)";
-      case "C": return "คิวด่วน / ค่าสายตาเดิม";
-      case "D": return "คิวสำรอง";
-      default: return "วัดสายตา";
-    }
-  };
-
-  const formatTime = (timestamp: any) => {
-    if (!timestamp) return "";
-    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp.seconds * 1000);
-    return date.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }) + " น.";
-  };
-
-  if (!myQueue) return <div className="min-h-screen flex items-center justify-center bg-gray-50 text-gray-500 font-medium">กำลังโหลดข้อมูล...</div>;
-
-  // กรณีลูกค้ายังไม่ได้ลงทะเบียน ชื่อ-เบอร์โทร
-  if (!myQueue.customerName || !myQueue.phoneNumber) {
+  if (!queue) {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
-        <div className="w-full max-w-md bg-white rounded-2xl shadow-lg p-6 border-t-8 border-blue-500 text-center">
-          <h2 className="text-xl font-bold text-gray-800">🎉 คุณได้คิวแล้ว!</h2>
-          <p className="text-gray-500 text-sm mt-2">หมายเลขคิวของคุณคือ</p>
-          <div className="text-6xl font-extrabold text-blue-600 my-4">{myQueue.queueNumber}</div>
-          
-          <div className="bg-yellow-50 text-yellow-700 p-3 rounded-lg text-sm mb-3 border border-yellow-200">
-            ⚠️ <b>กรุณากรอกข้อมูลด้านล่าง</b> เพื่อยืนยันการรับคิว<br/>หากไม่กรอกข้อมูล ระบบจะไม่สามารถเรียกคิวของคุณได้
-          </div>
-
-          <p className="text-xs font-semibold text-red-500 bg-red-50 p-2.5 rounded-lg border border-red-100 mb-6">
-            * หากถึงคิวแล้วไม่แสดงตนภายใน 5 นาที ถือว่าท่านสละสิทธิ์
-          </p>
-
-          <form onSubmit={handleUpdateInfo} className="space-y-4 text-left">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">ชื่อ - นามสกุล</label>
-              <input 
-                type="text" 
-                className="w-full border border-gray-300 rounded-lg px-4 py-2 text-gray-900 bg-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 outline-none"
-                placeholder="กรอกชื่อของคุณ"
-                value={nameInput}
-                onChange={(e) => setNameInput(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">เบอร์โทรศัพท์ (ใช้ค้นหาคิวภายหลัง)</label>
-              <input 
-                type="tel" 
-                maxLength={10}
-                className="w-full border border-gray-300 rounded-lg px-4 py-2 text-gray-900 bg-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 outline-none"
-                placeholder="08x-xxx-xxxx"
-                value={phoneInput}
-                onChange={(e) => setPhoneInput(e.target.value)}
-              />
-            </div>
-            <button 
-              type="submit" 
-              disabled={isUpdating}
-              className={`w-full text-white font-bold text-lg py-3 rounded-lg mt-4 transition shadow-md ${isUpdating ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'}`}
-            >
-              {isUpdating ? 'กำลังบันทึก...' : 'ยืนยันการรับคิว'}
-            </button>
-          </form>
-        </div>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <p className="text-gray-500 font-medium animate-pulse">กำลังโหลดข้อมูลคิว...</p>
       </div>
     );
   }
 
-  // หน้าแสดงสถานะบัตรคิวหลังลงทะเบียนแล้ว
+  const isRegistered = queue.customerName && queue.phoneNumber;
+
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-lg p-8 text-center border border-gray-100">
-        <h1 className="text-xl font-bold text-gray-700 mb-2">คิวของคุณคือ</h1>
+    <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
+      <div className="max-w-md w-full bg-white rounded-3xl shadow-xl p-6 space-y-6">
         
-        <div className={`text-6xl font-extrabold my-6 ${myQueue.status === 'CALLED' ? 'text-green-500 animate-bounce' : 'text-blue-600'}`}>
-          {myQueue.queueNumber}
-        </div>
+        {/* ฟอร์มลงทะเบียน (กรณีลูกค้ายังไม่กรอกข้อมูล) */}
+        {!isRegistered ? (
+          <div className="space-y-5 text-center">
+            <div className="space-y-1">
+              <p className="text-2xl font-black text-gray-800">🎉 คุณได้รับคิวแล้ว!</p>
+              <p className="text-xs text-gray-500 font-semibold">หมายเลขคิวของคุณคือ</p>
+            </div>
 
-        {myQueue.status === "CALLED" && (
-          <div className="bg-green-100 text-green-800 p-4 rounded-xl font-bold mb-6 text-center border border-green-300 animate-pulse">
-            <p className="text-lg">ถึงคิวของคุณแล้ว! กรุณาติดต่อพนักงานค่ะ/ครับ</p>
-            {myQueue.calledAt && (
-              <p className="text-xs text-green-700 mt-1 font-semibold">
-                ⏱️ เรียกเมื่อเวลา: {formatTime(myQueue.calledAt)}
+            <div className="py-2">
+              <span className="text-6xl font-black text-blue-600 tracking-tight">{queue.queueNumber}</span>
+            </div>
+
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 text-xs text-amber-800 font-medium">
+              ⚠️ กรุณากรอกข้อมูลด้านล่าง เพื่อยืนยันการรับคิว <br />
+              หากไม่กรอกข้อมูล ระบบจะไม่สามารถเรียกคิวของคุณได้
+            </div>
+
+            {/* ข้อความแจ้งเตือน 15 นาที */}
+            <div className="bg-red-50 border border-red-100 rounded-xl p-2.5 text-[11px] text-red-600 font-bold">
+              * หากถึงคิวแล้วไม่แสดงตนภายใน 15 นาที ถือว่าท่านสละสิทธิ์
+            </div>
+
+            <form onSubmit={handleRegister} className="space-y-4 text-left pt-2">
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">ชื่อ - นามสกุล</label>
+                <input
+                  type="text"
+                  placeholder="กรอกชื่อของคุณ"
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">เบอร์โทรศัพท์ (ใช้ค้นหาคิวย้อนหลัง)</label>
+                <input
+                  type="tel"
+                  placeholder="08x-xxx-xxxx"
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                  required
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-lg transition active:scale-95 disabled:opacity-50 text-sm"
+              >
+                {isSubmitting ? "กำลังบันทึก..." : "ยืนยันการรับคิว"}
+              </button>
+            </form>
+          </div>
+        ) : (
+          /* หน้าแสดงสถานะคิวเมื่อลงทะเบียนแล้ว */
+          <div className="space-y-6 text-center">
+            <div>
+              <p className="text-xs font-bold text-gray-400">คิวของคุณคือ</p>
+              <h1 className="text-6xl font-black text-blue-600 mt-1 tracking-tight">{queue.queueNumber}</h1>
+            </div>
+
+            <div className="bg-amber-50 border border-amber-100 rounded-2xl p-3 text-xs font-bold text-amber-700">
+              กรุณารอสักครู่ ระบบจะอัปเดตอัตโนมัติเมื่อถึงตัวของคุณ
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 bg-gray-50 p-4 rounded-2xl border border-gray-100">
+              <div>
+                <p className="text-[11px] font-bold text-gray-400">คิวที่รอทั้งหมด</p>
+                <p className="text-xl font-black text-gray-800 mt-0.5">{waitingCount} คิว</p>
+              </div>
+              <div className="border-l border-gray-200 pl-3">
+                <p className="text-[11px] font-bold text-gray-400">อีกกี่คิวถึงคุณ</p>
+                <p className="text-xl font-black text-blue-600 mt-0.5">{queuesAhead} คิว</p>
+              </div>
+            </div>
+
+            <div className="border-t border-gray-100 pt-4 text-left space-y-2">
+              <div className="flex justify-between text-xs">
+                <span className="text-gray-400 font-medium">คิวที่กำลังเรียก</span>
+                <span className="font-bold text-gray-800">
+                  {queue.status === "CALLED" ? "ถึงคิวของคุณแล้ว!" : "รอเรียกคิว"}
+                </span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-gray-400 font-medium">ประเภทบริการ</span>
+                <span className="font-bold text-gray-800">
+                  {queue.type === "A" && "วัดสายตา (ราคาปกติ)"}
+                  {queue.type === "B" && "วัดสายตา (แคมเปญ)"}
+                  {queue.type === "C" && "คิวด่วน / ติดต่อเจ้าหน้าที่"}
+                  {queue.type === "D" && "คิวสำรอง"}
+                </span>
+              </div>
+            </div>
+
+            <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 text-left space-y-1">
+              <p className="text-xs font-extrabold text-blue-800">ℹ️ ข้อมูลการรับบริการ</p>
+              <p className="text-[11px] text-blue-700 leading-relaxed">
+                ระยะเวลาวัดสายตาต่อ 1 ท่านจะใช้เวลาประมาณ 15 นาที หรืออาจจะใช้เวลานานกว่านี้ (ขึ้นอยู่กับความยากง่ายของแต่ละบุคคล)
               </p>
-            )}
-          </div>
-        )}
-
-        {myQueue.status === "WAITING" && (
-          <>
-            <div className="bg-yellow-50 text-yellow-700 p-3 rounded-lg text-sm mb-4 border border-yellow-200">
-              กรุณารอสักครู่ ระบบจะอัปเดตอัตโนมัติเมื่อถึงคิวของคุณ
             </div>
-            
-            <div className="flex justify-around bg-gray-100 rounded-lg p-4 mb-6">
-              <div>
-                <p className="text-xs text-gray-500 mb-1">คิวที่รอทั้งหมด</p>
-                <p className="text-xl font-bold text-gray-700">{totalWaiting} <span className="text-sm font-normal">คิว</span></p>
-              </div>
-              <div className="border-l border-gray-300"></div>
-              <div>
-                <p className="text-xs text-gray-500 mb-1">อีกกี่คิวถึงคุณ</p>
-                <p className="text-xl font-bold text-blue-600">{queuesAhead} <span className="text-sm font-normal">คิว</span></p>
-              </div>
+
+            {/* ข้อความแจ้งเตือน 15 นาที */}
+            <div className="bg-red-50 border border-red-100 rounded-2xl p-3 text-center">
+              <p className="text-[11px] font-bold text-red-600">
+                * หากถึงคิวแล้วไม่แสดงตนภายใน 15 นาที ถือว่าท่านสละสิทธิ์
+              </p>
             </div>
-          </>
-        )}
-
-        <div className="border-t pt-6 flex justify-between items-center text-gray-600 mb-6">
-          <div className="text-left">
-            <p className="text-xs text-gray-500 font-semibold">คิวที่กำลังเรียก</p>
-            <p className="text-2xl font-bold text-gray-800 mt-0.5">{currentServing}</p>
-          </div>
-          <div className="text-right">
-            <p className="text-xs text-gray-500 font-semibold">ประเภทบริการ</p>
-            <p className="text-sm font-bold text-gray-800 mt-1">{getTypeName(myQueue.type)}</p>
-          </div>
-        </div>
-        
-        {(myQueue.type === 'A' || myQueue.type === 'B') && (
-          <div className="mb-6 bg-blue-50 p-3 rounded-lg border border-blue-100 text-sm text-blue-700 text-left">
-            <span className="font-semibold block mb-1">ℹ️ ข้อมูลการรับบริการ</span>
-            ระยะเวลาวัดสายตาต่อ 1 ท่านจะใช้เวลาโดยประมาณ 15 นาที หรืออาจจะใช้เวลานานกว่านี้ (ขึ้นอยู่กับความยากง่ายของแต่ละบุคคล)
           </div>
         )}
-
-        <p className="text-sm font-semibold text-red-500 bg-red-50 p-3 rounded-lg border border-red-100">
-          * หากถึงคิวแล้วไม่แสดงตนภายใน 5 นาที<br/>ถือว่าท่านสละสิทธิ์
-        </p>
-
       </div>
     </div>
   );
