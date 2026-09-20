@@ -43,12 +43,11 @@ export default function AdminDashboardPage() {
     await updateDoc(branchRef, { allowReserve: !allowReserve });
   };
 
-  // ฟังก์ชั่นส่งเสียงเรียกคิว (Web Speech API)
+  // ฟังก์ชั่นส่งเสียงเรียกคิวแบบ Direct Trigger (โหลด Voice ทันทีขณะคลิก)
   const speakQueue = (queueNumber: string, lang: "TH" | "EN" = "TH", isRecall = false) => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
 
-    // ยกเลิกเสียงที่ค้างอยู่ก่อนหน้า
-    window.speechSynthesis.cancel();
+    window.speechSynthesis.cancel(); // ล้างคิวเสียงค้าง
 
     let text = "";
     if (lang === "TH") {
@@ -64,12 +63,14 @@ export default function AdminDashboardPage() {
     utterance.rate = 0.9;
     utterance.volume = 1;
 
-    // ดึงรายการเสียงที่พร้อมใช้งานใน Chrome
+    // ดึง Voice สดทันทีที่มีการกดปุ่ม
     const voices = window.speechSynthesis.getVoices();
-    const targetLang = lang === "TH" ? "th" : "en";
-    const selectedVoice = voices.find((v) => v.lang.toLowerCase().includes(targetLang));
-    if (selectedVoice) {
-      utterance.voice = selectedVoice;
+    if (voices.length > 0) {
+      const targetLang = lang === "TH" ? "th" : "en";
+      const selectedVoice = voices.find((v) => v.lang.toLowerCase().includes(targetLang));
+      if (selectedVoice) {
+        utterance.voice = selectedVoice;
+      }
     }
 
     window.speechSynthesis.speak(utterance);
