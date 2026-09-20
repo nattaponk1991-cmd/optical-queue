@@ -38,7 +38,7 @@ export default function SelectQueueTypePage() {
     return () => unsubscribe();
   }, [branchId]);
 
-  // ฟังก์ชั่นสร้างคิวใหม่ (รีเซ็ตนับ 1 ใหม่ทุกวันหลังเที่ยงคืน)
+  // ฟังก์ชั่นสร้างคิวใหม่ (คำนวณนับเฉพาะคิวที่ยังไม่ยกเลิกของวันนี้)
   const handleSelectType = async (type: "A" | "B" | "C" | "D") => {
     setLoading(true);
     try {
@@ -47,7 +47,7 @@ export default function SelectQueueTypePage() {
       todayStart.setHours(0, 0, 0, 0);
       const startTimestamp = Timestamp.fromDate(todayStart);
 
-      // 2. ดึงเฉพาะคิวประเภทเดียวกันที่ถูกสร้างขึ้นตั้งแต่วันนี้เป็นต้นไป
+      // 2. ดึงเฉพาะคิวประเภทเดียวกันของวันนี้ทั้งหมด
       const q = query(
         collection(db, "queues"),
         where("branchId", "==", branchId),
@@ -56,10 +56,17 @@ export default function SelectQueueTypePage() {
       );
 
       const snapshot = await getDocs(q);
-      const count = snapshot.size + 1; // รันลำดับถัดไปของวันปัจจุบัน
-      const queueNumber = `${type}${String(count).padStart(3, "0")}`;
+      
+      // 3. กรองนับเฉพาะคิวที่ไม่ถูกยกเลิก (ไม่นับ CANCELLED) เพื่อให้รีเซ็ตกลับเป็น 1 ได้จริงเมื่อ Admin สั่ง Reset
+      const activeQueues = snapshot.docs.filter((docSnap) => {
+        const data = docSnap.data();
+        return data.status !== "CANCELLED";
+      });
 
-      // 3. บันทึกข้อมูลคิวลง Firestore
+      const nextNumber = activeQueues.length + 1;
+      const queueNumber = `${type}${String(nextNumber).padStart(3, "0")}`;
+
+      // 4. บันทึกข้อมูลคิวลง Firestore
       const docRef = await addDoc(collection(db, "queues"), {
         branchId,
         type,
