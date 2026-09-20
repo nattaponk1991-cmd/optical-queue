@@ -66,7 +66,7 @@ export default function AdminDashboardPage() {
     await setDoc(branchRef, { allowReserve: !allowReserve }, { merge: true });
   };
 
-  // ฟังก์ชั่นจัดการการรีเซ็ตคิวทั้งหมดผ่านรหัสผ่าน 1234
+  // ฟังก์ชั่นจัดการการรีเซ็ตคิวแบบล้างตัวเลขให้กลับเป็น 0 คิวทั้งหมด
   const handleConfirmReset = async (e: React.FormEvent) => {
     e.preventDefault();
     if (resetPassword !== "1234") {
@@ -78,7 +78,7 @@ export default function AdminDashboardPage() {
     setResetError("");
 
     try {
-      // 1. ดึงคิวที่ค้างรอคิวอยู่ (WAITING หรือ CALLED) ของวันนี้
+      // 1. ดึงคิวทั้งหมดของวันนี้
       const todayStart = new Date();
       todayStart.setHours(0, 0, 0, 0);
       const startTimestamp = Timestamp.fromDate(todayStart);
@@ -92,18 +92,12 @@ export default function AdminDashboardPage() {
       const snapshot = await getDocs(q);
       const batch = writeBatch(db);
 
-      // 2. เคลียร์คิวที่ค้างให้เปลี่ยนเป็น CANCELLED
+      // 2. ลบเอกสารคิวทั้งหมดของวันนี้ออกจาก Firestore เพื่อให้ยอดสรุปทุกช่องกลายเป็น 0
       snapshot.docs.forEach((docSnap) => {
-        const data = docSnap.data();
-        if (data.status === "WAITING" || data.status === "CALLED") {
-          batch.update(docSnap.ref, {
-            status: "CANCELLED",
-            cancelledAt: serverTimestamp(),
-          });
-        }
+        batch.delete(docSnap.ref);
       });
 
-      // 3. รีเซ็ตหน้าจอ Display เคาน์เตอร์หน้าร้านให้เป็นว่าง
+      // 3. รีเซ็ตหน้าจอ Display เคาน์เตอร์หน้าร้านให้เป็น -
       const examCounterRef = doc(db, "counters", `${branchId}_exam_room`);
       const salesCounterRef = doc(db, "counters", `${branchId}_sales_counter`);
       batch.set(examCounterRef, { currentServing: "-" }, { merge: true });
@@ -113,7 +107,7 @@ export default function AdminDashboardPage() {
 
       setResetModalOpen(false);
       setResetPassword("");
-      alert("รีเซ็ตสถานะคิวประจำวันเรียบร้อยแล้ว!");
+      alert("รีเซ็ตและล้างข้อมูลคิวประจำวันทั้งหมดเรียบร้อยแล้ว!");
     } catch (error) {
       console.error("Error resetting queues:", error);
       alert("เกิดข้อผิดพลาดในการรีเซ็ตคิว");
@@ -680,7 +674,7 @@ export default function AdminDashboardPage() {
             </div>
 
             <p className="text-xs text-gray-500 font-medium leading-relaxed">
-              การรีเซ็ตจะทำการยกเลิกคิวที่ค้างรอคิวทั้งหมดของวันนี้ <br />
+              การรีเซ็ตจะทำการลบคิวทั้งหมดของวันนี้ <br />
               กรุณากรอกรหัสผ่านเพื่อยืนยันการทำรายการ
             </p>
 
