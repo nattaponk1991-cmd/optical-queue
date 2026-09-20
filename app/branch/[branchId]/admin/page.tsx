@@ -11,13 +11,12 @@ export default function AdminDashboardPage() {
   const [queues, setQueues] = useState<any[]>([]);
   const [allowReserve, setAllowReserve] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [lang, setLang] = useState<"TH" | "EN">("TH");
   const [showHistory, setShowHistory] = useState<{ [key: string]: boolean }>({});
 
   useEffect(() => {
     if (!branchId) return;
 
-    const branchRef = doc(db, "branches", branchId);
+    const branchRef = doc(doc(db, "branches", branchId));
     const unsubBranch = onSnapshot(branchRef, (docSnap) => {
       if (docSnap.exists()) {
         setAllowReserve(docSnap.data().allowReserve || false);
@@ -44,10 +43,11 @@ export default function AdminDashboardPage() {
     await updateDoc(branchRef, { allowReserve: !allowReserve });
   };
 
-  const speakQueue = (queueNumber: string, isRecall = false) => {
+  // ฟังก์ชั่นส่งเสียงเรียกคิว (TTS) รองรับระบุภาษา TH/EN แบบระบุตรง
+  const speakQueue = (queueNumber: string, lang: "TH" | "EN" = "TH", isRecall = false) => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-    
-    window.speechSynthesis.cancel();
+
+    window.speechSynthesis.cancel(); // ล้างคิวเสียงที่ค้างอยู่ก่อนหน้า
 
     let text = "";
     if (lang === "TH") {
@@ -55,17 +55,19 @@ export default function AdminDashboardPage() {
         ? `ขอเชิญหมายเลขคิว ${queueNumber.split("").join(" ")} อีกครั้งค่ะ` 
         : `ขอเชิญหมายเลขคิว ${queueNumber.split("").join(" ")} ที่ห้องวัดสายตาค่ะ`;
     } else {
-      text = `Number ${queueNumber.split("").join(" ")}, please step forward.`;
+      text = `Queue number ${queueNumber.split("").join(" ")}, please step forward to the examination room.`;
     }
 
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = lang === "TH" ? "th-TH" : "en-US";
     utterance.rate = 0.9;
+    utterance.volume = 1;
+
     window.speechSynthesis.speak(utterance);
   };
 
-  // เรียกคิวใหม่ หรือดึงคิวกลับมาเรียก
-  const handleCallQueue = async (queue: any, isRecall = false) => {
+  // เรียกคิวพร้อมระบุภาษา
+  const handleCallQueue = async (queue: any, lang: "TH" | "EN" = "TH", isRecall = false) => {
     try {
       await updateDoc(doc(db, "queues", queue.id), {
         status: "CALLED",
@@ -80,13 +82,12 @@ export default function AdminDashboardPage() {
         currentServing: queue.queueNumber,
       });
 
-      speakQueue(queue.queueNumber, isRecall);
+      speakQueue(queue.queueNumber, lang, isRecall);
     } catch (error) {
       console.error("Error calling queue:", error);
     }
   };
 
-  // กดเสร็จสิ้น
   const handleCompleteQueue = async (queueId: string) => {
     try {
       await updateDoc(doc(db, "queues", queueId), {
@@ -98,7 +99,6 @@ export default function AdminDashboardPage() {
     }
   };
 
-  // กดข้ามคิว (SKIPPED)
   const handleSkipQueue = async (queueId: string) => {
     try {
       await updateDoc(doc(db, "queues", queueId), {
@@ -110,7 +110,6 @@ export default function AdminDashboardPage() {
     }
   };
 
-  // กดยกเลิกคิว (CANCELLED)
   const handleCancelQueue = async (queueId: string) => {
     if (!confirm("คุณต้องการยกเลิกคิวนี้ใช่หรือไม่?")) return;
     try {
@@ -143,7 +142,6 @@ export default function AdminDashboardPage() {
     );
   });
 
-  // คำนวณสรุปจำนวนคิว
   const totalCount = filteredQueues.length;
   const waitingCount = filteredQueues.filter((q) => q.status === "WAITING").length;
   const calledCount = filteredQueues.filter((q) => q.status === "CALLED" || q.status === "COMPLETED").length;
@@ -155,7 +153,6 @@ export default function AdminDashboardPage() {
     const callingQueue = typeQueues.find((q) => q.status === "CALLED");
     const waitingQueues = typeQueues.filter((q) => q.status === "WAITING");
     
-    // คิวที่ผ่านไปแล้ว (COMPLETED, SKIPPED, CANCELLED)
     const historyQueues = typeQueues
       .filter((q) => q.status === "COMPLETED" || q.status === "SKIPPED" || q.status === "CANCELLED")
       .sort((a, b) => (b.calledAt?.seconds || 0) - (a.calledAt?.seconds || 0));
@@ -165,7 +162,7 @@ export default function AdminDashboardPage() {
         <div>
           <h2 className="text-lg font-extrabold text-gray-800 mb-4">{title}</h2>
 
-          {/* คิวที่กำลังเรียกปัจจุบัน */}
+          {/* คิวปัจจุบัน */}
           <div className="bg-gray-50 rounded-xl p-4 text-center border border-gray-100 mb-4">
             <p className="text-xs font-semibold text-gray-400 uppercase">กำลังเรียกคิว (CURRENT)</p>
             {callingQueue ? (
@@ -181,31 +178,43 @@ export default function AdminDashboardPage() {
                 </div>
 
                 {/* ปุ่มควบคุมคิวปัจจุบัน */}
-                <div className="grid grid-cols-2 gap-2 mt-4">
-                  <button
-                    onClick={() => handleCallQueue(callingQueue, true)}
-                    className="py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg text-xs transition shadow-sm"
-                  >
-                    📣 เรียกซ้ำ
-                  </button>
+                <div className="space-y-2 mt-4">
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => handleCallQueue(callingQueue, "TH", true)}
+                      className="py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg text-xs transition shadow-sm"
+                    >
+                      🇹🇭 เรียกซ้ำ (TH)
+                    </button>
+                    <button
+                      onClick={() => handleCallQueue(callingQueue, "EN", true)}
+                      className="py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs transition shadow-sm"
+                    >
+                      🇬🇧 Call (EN)
+                    </button>
+                  </div>
+
                   <button
                     onClick={() => handleCompleteQueue(callingQueue.id)}
-                    className="py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs transition shadow-sm"
+                    className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs transition shadow-sm"
                   >
                     ✓ เสร็จสิ้น
                   </button>
-                  <button
-                    onClick={() => handleSkipQueue(callingQueue.id)}
-                    className="py-1.5 bg-orange-100 hover:bg-orange-200 text-orange-700 font-bold rounded-lg text-xs transition"
-                  >
-                    ⏭️ ข้ามคิว
-                  </button>
-                  <button
-                    onClick={() => handleCancelQueue(callingQueue.id)}
-                    className="py-1.5 bg-red-100 hover:bg-red-200 text-red-700 font-bold rounded-lg text-xs transition"
-                  >
-                    ❌ ยกเลิกคิว
-                  </button>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => handleSkipQueue(callingQueue.id)}
+                      className="py-1.5 bg-orange-100 hover:bg-orange-200 text-orange-700 font-bold rounded-lg text-xs transition"
+                    >
+                      ⏭️ ข้ามคิว
+                    </button>
+                    <button
+                      onClick={() => handleCancelQueue(callingQueue.id)}
+                      className="py-1.5 bg-red-100 hover:bg-red-200 text-red-700 font-bold rounded-lg text-xs transition"
+                    >
+                      ❌ ยกเลิกคิว
+                    </button>
+                  </div>
                 </div>
               </div>
             ) : (
@@ -213,7 +222,7 @@ export default function AdminDashboardPage() {
             )}
           </div>
 
-          {/* รายการคิวที่รออยู่ */}
+          {/* คิวที่รออยู่ */}
           <div className="mb-4">
             <p className="text-xs font-bold text-gray-500 mb-2">
               คิวที่รออยู่ ({waitingQueues.length} คิว):
@@ -233,10 +242,18 @@ export default function AdminDashboardPage() {
                     </div>
                     <div className="flex gap-1">
                       <button
-                        onClick={() => handleCallQueue(item)}
-                        className="py-1 px-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs transition"
+                        onClick={() => handleCallQueue(item, "TH")}
+                        className="py-1 px-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs transition"
+                        title="เรียกคิวภาษาไทย"
                       >
-                        เรียกคิว
+                        🇹🇭 เรียก
+                      </button>
+                      <button
+                        onClick={() => handleCallQueue(item, "EN")}
+                        className="py-1 px-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-xs transition"
+                        title="Call English"
+                      >
+                        🇬🇧 EN
                       </button>
                       <button
                         onClick={() => handleCancelQueue(item.id)}
@@ -252,7 +269,7 @@ export default function AdminDashboardPage() {
             </div>
           </div>
 
-          {/* ประวัติคิวที่ผ่านไปแล้ว (ข้าม / เสร็จสิ้น / ยกเลิก) */}
+          {/* ประวัติคิวที่ผ่านไปแล้ว */}
           <div className="border-t border-gray-100 pt-3">
             <button
               onClick={() => toggleHistoryDropdown(type)}
@@ -277,7 +294,6 @@ export default function AdminDashboardPage() {
                           {item.queueNumber}
                           <span className="font-normal text-gray-500">({item.customerName || "ไม่ระบุ"})</span>
                           
-                          {/* แสดงป้ายสถานะ */}
                           {item.status === "SKIPPED" && (
                             <span className="text-[10px] bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded font-bold">
                               ข้ามคิว
@@ -299,13 +315,22 @@ export default function AdminDashboardPage() {
                         </p>
                       </div>
 
-                      {/* ปุ่มดึงคิวกลับมาเรียกใหม่ */}
-                      <button
-                        onClick={() => handleCallQueue(item, true)}
-                        className="py-1 px-2 bg-gray-200 hover:bg-amber-500 hover:text-white text-gray-700 font-bold rounded-md transition text-[11px]"
-                      >
-                        🔄 ดึงกลับมาเรียก
-                      </button>
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => handleCallQueue(item, "TH", true)}
+                          className="py-1 px-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-md transition text-[11px]"
+                          title="ดึงกลับมาเรียกภาษาไทย"
+                        >
+                          🔄 TH
+                        </button>
+                        <button
+                          onClick={() => handleCallQueue(item, "EN", true)}
+                          className="py-1 px-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-md transition text-[11px]"
+                          title="ดึงกลับมาเรียกภาษาอังกฤษ"
+                        >
+                          🔄 EN
+                        </button>
+                      </div>
                     </div>
                   ))
                 )}
@@ -337,25 +362,10 @@ export default function AdminDashboardPage() {
             >
               คิวสำรอง (D): {allowReserve ? "🟢 เปิดรับคิว" : "🔴 ปิดรับคิว"}
             </button>
-
-            <div className="flex bg-gray-100 p-1 rounded-xl text-xs font-bold">
-              <button
-                onClick={() => setLang("TH")}
-                className={`px-3 py-1.5 rounded-lg transition ${lang === "TH" ? "bg-blue-600 text-white" : "text-gray-600"}`}
-              >
-                🇹🇭 ภาษาไทย
-              </button>
-              <button
-                onClick={() => setLang("EN")}
-                className={`px-3 py-1.5 rounded-lg transition ${lang === "EN" ? "bg-blue-600 text-white" : "text-gray-600"}`}
-              >
-                🇬🇧 English
-              </button>
-            </div>
           </div>
         </div>
 
-        {/* แถบสรุปภาพรวมจำนวนคิวประจำวัน */}
+        {/* สรุปจำนวนคิวประจำวัน */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 text-center">
             <p className="text-xs font-bold text-gray-400">คิวทั้งหมด</p>
