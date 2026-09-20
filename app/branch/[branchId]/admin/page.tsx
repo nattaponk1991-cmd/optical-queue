@@ -43,7 +43,7 @@ export default function AdminDashboardPage() {
     await setDoc(branchRef, { allowReserve: !allowReserve }, { merge: true });
   };
 
-  // ฟังก์ชั่นส่งเสียงเรียกคิวแบบอ่านธรรมชาติ (ตัดคำว่าคิวออก, C ติดต่อเจ้าหน้าที่)
+  // ฟังก์ชั่นส่งเสียงเรียกคิวสำเนียงไทยธรรมชาติ
   const speakQueue = (queueNumber: string, lang: "TH" | "EN" = "TH", queueType: string = "A") => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
 
@@ -52,39 +52,39 @@ export default function AdminDashboardPage() {
       window.speechSynthesis.resume();
     }
 
-    // กำหนดสถานที่ปลายทางตามประเภทคิว
-    let destination = "ที่เคาน์เตอร์บริการค่ะ";
-    if (queueType === "C") {
-      destination = "โปรดติดต่อเจ้าหน้าที่ค่ะ";
+    // กำหนดข้อความสถานที่ตามเงื่อนไข: A, B ไปห้องวัดสายตา / C, D ติดต่อเจ้าหน้าที่
+    let destination = "โปรดติดต่อเจ้าหน้าที่ค่ะ";
+    if (queueType === "A" || queueType === "B") {
+      destination = "ที่ห้องวัดสายตาค่ะ";
     }
 
     let text = "";
     if (lang === "TH") {
-      // แปลงอักษรภาษาอังกฤษให้เป็นเสียงอ่านภาษาไทยแบบต่อเนื่อง ไม่เว้นวรรคให้ฟังแปลก
+      // แปลงอักษรภาษาอังกฤษให้อ่านเป็นคำไทยธรรมชาติ
       let formattedNumber = queueNumber;
       if (queueNumber.startsWith("A")) formattedNumber = queueNumber.replace("A", "เอ");
       else if (queueNumber.startsWith("B")) formattedNumber = queueNumber.replace("B", "บี");
       else if (queueNumber.startsWith("C")) formattedNumber = queueNumber.replace("C", "ซี");
       else if (queueNumber.startsWith("D")) formattedNumber = queueNumber.replace("D", "ดี");
 
-      // เอาคำว่า "คิว" ออก ตามโจทย์ที่ต้องการ
       text = `ขอเชิญหมายเลข ${formattedNumber} ${destination}`;
     } else {
-      text = `Number ${queueNumber.split("").join(" ")}, please step forward to the service counter.`;
+      text = `Number ${queueNumber.split("").join(" ")}, please step forward.`;
     }
 
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = lang === "TH" ? "th-TH" : "en-US";
-    utterance.rate = 0.9;
+    utterance.rate = 0.88;
     utterance.volume = 1;
-    utterance.pitch = 1;
 
+    // ค้นหาเสียงพากย์ภาษาไทยแท้ของระบบ (เช่น เสียง Kanya บน Mac/iOS)
     const voices = window.speechSynthesis.getVoices();
     if (voices.length > 0) {
-      const targetLang = lang === "TH" ? "th" : "en";
-      const selectedVoice = voices.find((v) => v.lang.toLowerCase().startsWith(targetLang));
-      if (selectedVoice) {
-        utterance.voice = selectedVoice;
+      const thaiVoice = voices.find(
+        (v) => v.lang.includes("th") || v.name.toLowerCase().includes("kanya")
+      );
+      if (thaiVoice && lang === "TH") {
+        utterance.voice = thaiVoice;
       }
     }
 
