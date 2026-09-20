@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "No text provided" }, { status: 400 });
   }
 
-  // เรียก Google Translate TTS API เพื่อแปลงข้อความเป็นไฟล์เสียง MP3
+  // เติม https:// ให้ครบถ้วนสมบูรณ์
   const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(
     text
   )}&tl=${lang}&client=tw-ob`;
@@ -21,6 +21,10 @@ export async function GET(req: NextRequest) {
           "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
       },
     });
+
+    if (!response.ok) {
+      throw new Error(`Google TTS responded with status ${response.status}`);
+    }
 
     const arrayBuffer = await response.arrayBuffer();
     return new NextResponse(arrayBuffer, {
