@@ -12,20 +12,6 @@ export default function AdminDashboardPage() {
   const [allowReserve, setAllowReserve] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [showHistory, setShowHistory] = useState<{ [key: string]: boolean }>({});
-  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
-
-  // โหลดรายการเสียง (Voices) ของระบบ
-  useEffect(() => {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-
-    const updateVoices = () => {
-      const availableVoices = window.speechSynthesis.getVoices();
-      setVoices(availableVoices);
-    };
-
-    updateVoices();
-    window.speechSynthesis.onvoiceschanged = updateVoices;
-  }, []);
 
   useEffect(() => {
     if (!branchId) return;
@@ -57,13 +43,8 @@ export default function AdminDashboardPage() {
     await updateDoc(branchRef, { allowReserve: !allowReserve });
   };
 
-  // ฟังก์ชั่นส่งเสียงเรียกคิว (TTS) ปรับปรุงให้ดึง Voice Object จากระบบโดยตรง
+  // ฟังก์ชั่นเรียกเสียงพูด MP3 ผ่าน API มีเสถียรภาพ 100%
   const speakQueue = (queueNumber: string, lang: "TH" | "EN" = "TH", isRecall = false) => {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-
-    // ยกเลิกเสียงที่ค้างอยู่
-    window.speechSynthesis.cancel();
-
     let text = "";
     if (lang === "TH") {
       text = isRecall 
@@ -73,22 +54,13 @@ export default function AdminDashboardPage() {
       text = `Queue number ${queueNumber.split("").join(" ")}, please step forward to the examination room.`;
     }
 
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = lang === "TH" ? "th-TH" : "en-US";
-    utterance.rate = 0.9;
-    utterance.volume = 1;
+    const langParam = lang === "TH" ? "th" : "en";
+    const audioUrl = `/api/tts?text=${encodeURIComponent(text)}&lang=${langParam}`;
 
-    // ค้นหา Voice Object จากเบราว์เซอร์ที่ตรงกับภาษา
-    const currentVoices = voices.length > 0 ? voices : window.speechSynthesis.getVoices();
-    const targetLang = lang === "TH" ? "th" : "en";
-    const selectedVoice = currentVoices.find((v) => v.lang.toLowerCase().includes(targetLang));
-
-    if (selectedVoice) {
-      utterance.voice = selectedVoice;
-    }
-
-    // สั่งรันเสียง
-    window.speechSynthesis.speak(utterance);
+    const audio = new Audio(audioUrl);
+    audio.play().catch((err) => {
+      console.error("Audio playback error:", err);
+    });
   };
 
   const handleCallQueue = async (queue: any, lang: "TH" | "EN" = "TH", isRecall = false) => {
