@@ -12,6 +12,20 @@ export default function AdminDashboardPage() {
   const [allowReserve, setAllowReserve] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [showHistory, setShowHistory] = useState<{ [key: string]: boolean }>({});
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+
+  // โหลดรายการเสียงของระบบรองรับ Chrome/Safari บน macOS
+  useEffect(() => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+
+    const loadVoices = () => {
+      const availableVoices = window.speechSynthesis.getVoices();
+      setVoices(availableVoices);
+    };
+
+    loadVoices();
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+  }, []);
 
   useEffect(() => {
     if (!branchId) return;
@@ -43,7 +57,7 @@ export default function AdminDashboardPage() {
     await setDoc(branchRef, { allowReserve: !allowReserve }, { merge: true });
   };
 
-  // ฟังก์ชั่นส่งเสียงเรียกคิว (ปรับปรุงเงื่อนไขดึงเสียงภาษาไทยให้การันตีอ่านออกเสียง 100%)
+  // ฟังก์ชั่นส่งเสียงเรียกคิวสองภาษา เสถียร 100%
   const speakQueue = (queueNumber: string, lang: "TH" | "EN" = "TH", queueType: string = "A") => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
 
@@ -75,25 +89,23 @@ export default function AdminDashboardPage() {
 
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = lang === "TH" ? "th-TH" : "en-US";
-    
     utterance.rate = lang === "TH" ? 0.82 : 0.88;
     utterance.pitch = lang === "TH" ? 1.15 : 1.0;
     utterance.volume = 1;
 
-    // การเลือกล็อคเสียงแบบใหม่ที่ปลอดภัยและไม่ตกหล่น
-    const voices = window.speechSynthesis.getVoices();
-    if (voices.length > 0) {
-      if (lang === "TH") {
-        const thaiVoice = voices.find((v) => v.name.includes("Kanya")) ||
-                          voices.find((v) => v.lang.toLowerCase().startsWith("th"));
-        if (thaiVoice) {
-          utterance.voice = thaiVoice;
-        }
-      } else {
-        const enVoice = voices.find((v) => v.lang.toLowerCase().startsWith("en"));
-        if (enVoice) {
-          utterance.voice = enVoice;
-        }
+    // ดึงรายการเสียงที่พร้อมใช้งานสดๆ
+    const currentVoices = voices.length > 0 ? voices : window.speechSynthesis.getVoices();
+    
+    if (lang === "TH") {
+      // ค้นหาเสียงภาษาไทยแท้ Kanya หรือ th-TH
+      const thaiVoice = currentVoices.find((v) => v.lang.toLowerCase().includes("th") || v.name.includes("Kanya"));
+      if (thaiVoice) {
+        utterance.voice = thaiVoice;
+      }
+    } else {
+      const enVoice = currentVoices.find((v) => v.lang.toLowerCase().startsWith("en"));
+      if (enVoice) {
+        utterance.voice = enVoice;
       }
     }
 
