@@ -43,7 +43,7 @@ export default function AdminDashboardPage() {
     await setDoc(branchRef, { allowReserve: !allowReserve }, { merge: true });
   };
 
-  // ฟังก์ชั่นส่งเสียงเรียกคิว (ปรับความเร็วไทยลงมา และเพิ่มจุดหมายภาษาอังกฤษ)
+  // ฟังก์ชั่นส่งเสียงเรียกคิว (ปรับสำเนียงไทยให้ฟังง่าย นุ่มนวล และเพิ่มสถานที่ภาษาอังกฤษ)
   const speakQueue = (queueNumber: string, lang: "TH" | "EN" = "TH", queueType: string = "A") => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
 
@@ -54,7 +54,7 @@ export default function AdminDashboardPage() {
 
     let text = "";
     if (lang === "TH") {
-      // ไทย: A, B ไปห้องวัดสายตา / C, D ติดต่อเจ้าหน้าที่
+      // ไทย: A, B ไปห้องวัดสายตา / C, D ติดต่อเจ้าหน้าที่ (ตัดคำว่า คิว และ โปรด ออก)
       const destination = (queueType === "A" || queueType === "B") 
         ? "ที่ห้องวัดสายตาค่ะ" 
         : "ติดต่อเจ้าหน้าที่ค่ะ";
@@ -67,10 +67,10 @@ export default function AdminDashboardPage() {
 
       text = `ขอเชิญหมายเลข ${formattedNumber} ${destination}`;
     } else {
-      // อังกฤษ: A, B ไป examination room / C, D ไป service counter
+      // อังกฤษ: A, B ไป examination room / C, D ติดต่อพนักงาน (contact our staff)
       const enDestination = (queueType === "A" || queueType === "B")
         ? "please step forward to the examination room."
-        : "please step forward to the service counter.";
+        : "please contact our staff.";
 
       text = `Number ${queueNumber.split("").join(" ")}, ${enDestination}`;
     }
@@ -78,8 +78,7 @@ export default function AdminDashboardPage() {
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = lang === "TH" ? "th-TH" : "en-US";
     
-    // ไทย: ความเร็ว 0.82 (ช้าลงพอดีๆ ไม่สปีด) + เสียงสดใส 1.15
-    // อังกฤษ: ความเร็ว 0.88 + เสียงปกติ 1.0
+    // ไทย: ความเร็ว 0.82 (จังหวะอ่านกำลังพอดี) + ปรับระดับเสียง 1.15
     utterance.rate = lang === "TH" ? 0.82 : 0.88;
     utterance.pitch = lang === "TH" ? 1.15 : 1.0;
     utterance.volume = 1;
