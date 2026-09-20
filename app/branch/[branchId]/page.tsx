@@ -1,7 +1,17 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { collection, query, where, getDocs, addDoc, serverTimestamp, doc, onSnapshot } from "firebase/firestore";
+import { 
+  collection, 
+  query, 
+  where, 
+  getDocs, 
+  addDoc, 
+  serverTimestamp, 
+  doc, 
+  onSnapshot, 
+  Timestamp 
+} from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 export default function SelectQueueTypePage() {
@@ -28,19 +38,28 @@ export default function SelectQueueTypePage() {
     return () => unsubscribe();
   }, [branchId]);
 
-  // ฟังก์ชั่นสร้างคิวใหม่
+  // ฟังก์ชั่นสร้างคิวใหม่ (รีเซ็ตนับ 1 ใหม่ทุกวันหลังเที่ยงคืน)
   const handleSelectType = async (type: "A" | "B" | "C" | "D") => {
     setLoading(true);
     try {
+      // 1. กำหนดเวลาเริ่มต้นของวันนี้ (Today 00:00:00)
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const startTimestamp = Timestamp.fromDate(todayStart);
+
+      // 2. ดึงเฉพาะคิวประเภทเดียวกันที่ถูกสร้างขึ้นตั้งแต่วันนี้เป็นต้นไป
       const q = query(
         collection(db, "queues"),
         where("branchId", "==", branchId),
-        where("type", "==", type)
+        where("type", "==", type),
+        where("createdAt", ">=", startTimestamp)
       );
+
       const snapshot = await getDocs(q);
-      const count = snapshot.size + 1;
+      const count = snapshot.size + 1; // รันลำดับถัดไปของวันปัจจุบัน
       const queueNumber = `${type}${String(count).padStart(3, "0")}`;
 
+      // 3. บันทึกข้อมูลคิวลง Firestore
       const docRef = await addDoc(collection(db, "queues"), {
         branchId,
         type,
