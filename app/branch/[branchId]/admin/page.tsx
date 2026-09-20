@@ -43,7 +43,7 @@ export default function AdminDashboardPage() {
     await setDoc(branchRef, { allowReserve: !allowReserve }, { merge: true });
   };
 
-  // ฟังก์ชั่นส่งเสียงเรียกคิวแบบธรรมชาติ (ตัดคำว่าอีกครั้งออก และปรับการอ่านเลขคิว)
+  // ฟังก์ชั่นส่งเสียงเรียกคิวแบบอ่านธรรมชาติ (ตัดคำว่าคิวออก, C ติดต่อเจ้าหน้าที่)
   const speakQueue = (queueNumber: string, lang: "TH" | "EN" = "TH", queueType: string = "A") => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
 
@@ -53,14 +53,24 @@ export default function AdminDashboardPage() {
     }
 
     // กำหนดสถานที่ปลายทางตามประเภทคิว
-    const destination = (queueType === "A" || queueType === "B") ? "ที่ห้องวัดสายตาค่ะ" : "ที่เคาน์เตอร์บริการค่ะ";
+    let destination = "ที่เคาน์เตอร์บริการค่ะ";
+    if (queueType === "C") {
+      destination = "โปรดติดต่อเจ้าหน้าที่ค่ะ";
+    }
 
     let text = "";
     if (lang === "TH") {
-      // อ่านเลขคิวอย่างเป็นธรรมชาติ เช่น "ขอเชิญหมายเลขคิว A006 ที่ห้องวัดสายตาค่ะ"
-      text = `ขอเชิญหมายเลขคิว ${queueNumber} ${destination}`;
+      // แปลงอักษรภาษาอังกฤษให้เป็นเสียงอ่านภาษาไทยแบบต่อเนื่อง ไม่เว้นวรรคให้ฟังแปลก
+      let formattedNumber = queueNumber;
+      if (queueNumber.startsWith("A")) formattedNumber = queueNumber.replace("A", "เอ");
+      else if (queueNumber.startsWith("B")) formattedNumber = queueNumber.replace("B", "บี");
+      else if (queueNumber.startsWith("C")) formattedNumber = queueNumber.replace("C", "ซี");
+      else if (queueNumber.startsWith("D")) formattedNumber = queueNumber.replace("D", "ดี");
+
+      // เอาคำว่า "คิว" ออก ตามโจทย์ที่ต้องการ
+      text = `ขอเชิญหมายเลข ${formattedNumber} ${destination}`;
     } else {
-      text = `Queue number ${queueNumber.split("").join(" ")}, please step forward to the examination room.`;
+      text = `Number ${queueNumber.split("").join(" ")}, please step forward to the service counter.`;
     }
 
     const utterance = new SpeechSynthesisUtterance(text);
@@ -83,10 +93,8 @@ export default function AdminDashboardPage() {
 
   const handleCallQueue = async (queue: any, lang: "TH" | "EN" = "TH") => {
     try {
-      // 1. ส่งเสียงเรียกคิว
       speakQueue(queue.queueNumber, lang, queue.type);
 
-      // 2. อัปเดตสถานะใน Firestore
       await updateDoc(doc(db, "queues", queue.id), {
         status: "CALLED",
         calledAt: serverTimestamp(),
