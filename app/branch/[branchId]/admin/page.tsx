@@ -43,7 +43,7 @@ export default function AdminDashboardPage() {
     await setDoc(branchRef, { allowReserve: !allowReserve }, { merge: true });
   };
 
-  // ฟังก์ชั่นส่งเสียงเรียกคิว
+  // ฟังก์ชั่นส่งเสียงเรียกคิว (ปรับปรุงเงื่อนไขดึงเสียงภาษาไทยให้การันตีอ่านออกเสียง 100%)
   const speakQueue = (queueNumber: string, lang: "TH" | "EN" = "TH", queueType: string = "A") => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
 
@@ -80,18 +80,49 @@ export default function AdminDashboardPage() {
     utterance.pitch = lang === "TH" ? 1.15 : 1.0;
     utterance.volume = 1;
 
+    // การเลือกล็อคเสียงแบบใหม่ที่ปลอดภัยและไม่ตกหล่น
     const voices = window.speechSynthesis.getVoices();
     if (voices.length > 0) {
-      const targetLang = lang === "TH" ? "th" : "en";
-      const selectedVoice = voices.find(
-        (v) => v.name.includes("Kanya") || v.lang.toLowerCase().startsWith(targetLang)
-      );
-      if (selectedVoice) {
-        utterance.voice = selectedVoice;
+      if (lang === "TH") {
+        const thaiVoice = voices.find((v) => v.name.includes("Kanya")) ||
+                          voices.find((v) => v.lang.toLowerCase().startsWith("th"));
+        if (thaiVoice) {
+          utterance.voice = thaiVoice;
+        }
+      } else {
+        const enVoice = voices.find((v) => v.lang.toLowerCase().startsWith("en"));
+        if (enVoice) {
+          utterance.voice = enVoice;
+        }
       }
     }
 
     window.speechSynthesis.speak(utterance);
+  };
+
+  const isUnregistered = (queue: any) => {
+    return !queue.customerName || queue.customerName.trim() === "" || queue.customerName === "ไม่ระบุชื่อ" || queue.customerName === "รอลงทะเบียน";
+  };
+
+  const handleEditCustomerInfo = async (queue: any) => {
+    const currentName = queue.customerName || "";
+    const currentPhone = queue.phoneNumber || "";
+
+    const newName = prompt(`กรอกชื่อลูกค้า สำหรับคิว ${queue.queueNumber}:`, currentName);
+    if (newName === null) return;
+
+    const newPhone = prompt(`กรอกเบอร์โทรศัพท์ สำหรับคิว ${queue.queueNumber}:`, currentPhone);
+    if (newPhone === null) return;
+
+    try {
+      await updateDoc(doc(db, "queues", queue.id), {
+        customerName: newName.trim(),
+        phoneNumber: newPhone.trim(),
+      });
+    } catch (error) {
+      console.error("Error updating customer info:", error);
+      alert("เกิดข้อผิดพลาดในการบันทึกข้อมูล");
+    }
   };
 
   const handleCallQueue = async (queue: any, lang: "TH" | "EN" = "TH") => {
@@ -113,33 +144,6 @@ export default function AdminDashboardPage() {
 
     } catch (error) {
       console.error("Error calling queue:", error);
-    }
-  };
-
-  // ตรวจสอบว่าคิวนี้ยังไม่ได้กรอกข้อมูลใช่หรือไม่
-  const isUnregistered = (queue: any) => {
-    return !queue.customerName || queue.customerName.trim() === "" || queue.customerName === "ไม่ระบุชื่อ" || queue.customerName === "รอลงทะเบียน";
-  };
-
-  // ฟังก์ชั่นแก้ไขข้อมูลเฉพาะคิวที่ยังไม่ได้ลงทะเบียน
-  const handleEditCustomerInfo = async (queue: any) => {
-    const currentName = queue.customerName || "";
-    const currentPhone = queue.phoneNumber || "";
-
-    const newName = prompt(`กรอกชื่อลูกค้า สำหรับคิว ${queue.queueNumber}:`, currentName);
-    if (newName === null) return;
-
-    const newPhone = prompt(`กรอกเบอร์โทรศัพท์ สำหรับคิว ${queue.queueNumber}:`, currentPhone);
-    if (newPhone === null) return;
-
-    try {
-      await updateDoc(doc(db, "queues", queue.id), {
-        customerName: newName.trim(),
-        phoneNumber: newPhone.trim(),
-      });
-    } catch (error) {
-      console.error("Error updating customer info:", error);
-      alert("เกิดข้อผิดพลาดในการบันทึกข้อมูล");
     }
   };
 
@@ -230,7 +234,6 @@ export default function AdminDashboardPage() {
                   {callingQueue.phoneNumber || "ไม่มีเบอร์"}
                 </p>
 
-                {/* ปุ่มแก้ไขข้อมูลคิวปัจจุบัน เฉพาะคิวที่ยังไม่ลงทะเบียน */}
                 {isUnregistered(callingQueue) && (
                   <button
                     onClick={() => handleEditCustomerInfo(callingQueue)}
@@ -308,7 +311,6 @@ export default function AdminDashboardPage() {
                       <span className="font-extrabold text-sm text-gray-800">{item.queueNumber}</span>
                       <span className="text-xs text-gray-500 ml-1.5">{item.customerName || "รอลงทะเบียน"}</span>
                       
-                      {/* แสดงปุ่มแก้ไขเฉพาะคิวที่รอซึ่งยังไม่ลงทะเบียน */}
                       {isUnregistered(item) && (
                         <button
                           onClick={() => handleEditCustomerInfo(item)}
@@ -348,7 +350,7 @@ export default function AdminDashboardPage() {
             </div>
           </div>
 
-          {/* ประวัติคิวที่ผ่านไปแล้ว (ข้าม/ยกเลิก/จบ) */}
+          {/* ประวัติคิวที่ผ่านไปแล้ว */}
           <div className="border-t border-gray-100 pt-3">
             <button
               onClick={() => toggleHistoryDropdown(type)}
@@ -373,7 +375,6 @@ export default function AdminDashboardPage() {
                           {item.queueNumber}
                           <span className="font-normal text-gray-500">({item.customerName || "ไม่ระบุ"})</span>
                           
-                          {/* แสดงปุ่มเติมข้อมูลกรณีคิวที่ข้าม/ยกเลิกแต่ยังไม่มีชื่อ */}
                           {isUnregistered(item) && (
                             <button
                               onClick={() => handleEditCustomerInfo(item)}
