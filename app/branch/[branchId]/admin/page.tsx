@@ -16,7 +16,8 @@ export default function AdminDashboardPage() {
   useEffect(() => {
     if (!branchId) return;
 
-    const branchRef = doc(doc(db, "branches", branchId));
+    // แก้ไขจุดซ้อน doc(...) เรียบร้อยแล้ว
+    const branchRef = doc(db, "branches", branchId);
     const unsubBranch = onSnapshot(branchRef, (docSnap) => {
       if (docSnap.exists()) {
         setAllowReserve(docSnap.data().allowReserve || false);
@@ -43,11 +44,11 @@ export default function AdminDashboardPage() {
     await updateDoc(branchRef, { allowReserve: !allowReserve });
   };
 
-  // ฟังก์ชั่นส่งเสียงเรียกคิว (TTS) รองรับระบุภาษา TH/EN แบบระบุตรง
+  // ฟังก์ชั่นส่งเสียงเรียกคิว (TTS) รองรับภาษา TH และ EN
   const speakQueue = (queueNumber: string, lang: "TH" | "EN" = "TH", isRecall = false) => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
 
-    window.speechSynthesis.cancel(); // ล้างคิวเสียงที่ค้างอยู่ก่อนหน้า
+    window.speechSynthesis.cancel();
 
     let text = "";
     if (lang === "TH") {
@@ -66,7 +67,6 @@ export default function AdminDashboardPage() {
     window.speechSynthesis.speak(utterance);
   };
 
-  // เรียกคิวพร้อมระบุภาษา
   const handleCallQueue = async (queue: any, lang: "TH" | "EN" = "TH", isRecall = false) => {
     try {
       await updateDoc(doc(db, "queues", queue.id), {
@@ -177,7 +177,6 @@ export default function AdminDashboardPage() {
                   </p>
                 </div>
 
-                {/* ปุ่มควบคุมคิวปัจจุบัน */}
                 <div className="space-y-2 mt-4">
                   <div className="grid grid-cols-2 gap-2">
                     <button
